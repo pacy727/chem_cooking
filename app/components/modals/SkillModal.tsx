@@ -53,15 +53,15 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
     {
       key: 'cost_reduction' as const,
       title: '仕入れ上手',
-      description: '材料費を削減します',
-      details: ['0%削減', '5%削減', '10%削減', '20%削減'],
+      baseDescription: '材料費を削減します',
+      details: ['0%', '5%', '10%', '20%'],
       icon: '💰',
       color: 'purple'
     },
     {
       key: 'recipe_discount' as const,
       title: 'レシピ研究',
-      description: 'レシピ購入費が安くなります',
+      baseDescription: 'レシピ購入費が安くなります',
       details: ['300円', '200円', '100円', '50円'],
       icon: '📚',
       color: 'blue'
@@ -69,7 +69,7 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
     {
       key: 'hospitality' as const,
       title: 'おもてなし',
-      description: '成功時のボーナスが増加します',
+      baseDescription: '成功時のボーナスが増加します',
       details: ['1.0倍', '1.2倍', '1.5倍', '2.0倍'],
       icon: '🤝',
       color: 'green'
@@ -77,7 +77,7 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
     {
       key: 'chef_personality' as const,
       title: 'シェフの人柄',
-      description: '失敗時に再挑戦できる確率が上がります',
+      baseDescription: '失敗時に再挑戦できる確率が上がります',
       details: ['0%', '10%', '20%', '30%'],
       icon: '😊',
       color: 'orange'
@@ -85,7 +85,7 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
     {
       key: 'word_of_mouth' as const,
       title: '口コミ評価',
-      description: 'VIP客の来店率が上がります',
+      baseDescription: 'VIP客の来店率が上がります',
       details: ['1.0倍', '1.5倍', '2.0倍', '3.0倍'],
       icon: '⭐',
       color: 'yellow'
@@ -93,7 +93,7 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
     {
       key: 'salvage' as const,
       title: 'サルベージ',
-      description: '材料回収時の返金率が上がります',
+      baseDescription: '材料回収時の返金率が上がります',
       details: ['0%', '10%', '50%', '80%'],
       icon: '♻️',
       color: 'red'
@@ -119,9 +119,24 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {skillData.map((skill) => {
-            const level = userData.skills[skill.key];
+            const level = userData.skills[skill.key] || 0;
             const isMaxLevel = level >= 3;
             const canUpgrade = userData.skillPoints > 0 && !isMaxLevel;
+
+            console.log(`スキル: ${skill.title}, レベル: ${level}`);
+
+            // 説明テキストの生成
+            const getDescriptionText = () => {
+              // 安全な配列アクセス
+              const currentValue = skill.details[level] || `レベル${level}`;
+              const nextValue = skill.details[level + 1] || `レベル${level + 1}`;
+              
+              if (isMaxLevel) {
+                return `${skill.baseDescription}\n（現在: ${currentValue}）`;
+              } else {
+                return `${skill.baseDescription}\n（${currentValue} → ${nextValue}）`;
+              }
+            };
 
             return (
               <div key={skill.key} className="bg-gray-50 p-4 rounded-lg border">
@@ -143,15 +158,15 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
                   </button>
                 </div>
                 
-                <p className="text-sm text-gray-600 mb-2">{skill.description}</p>
+                <p className="text-sm text-gray-600 mb-2 whitespace-pre-line">{getDescriptionText()}</p>
                 
                 <div className="flex items-center gap-1 mb-2">
                   <span className="text-xs text-gray-500">Lv.{level}</span>
                   <div className="flex gap-1">
-                    {[...Array(4)].map((_, i) => (
+                    {[...Array(3)].map((_, i) => (
                       <div
                         key={i}
-                        className={`w-2 h-2 rounded-full ${
+                        className={`w-3 h-3 rounded-full ${
                           i < level ? 'bg-blue-500' : 'bg-gray-300'
                         }`}
                       />
@@ -159,12 +174,11 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
                   </div>
                 </div>
                 
-                <div className="text-xs text-gray-500">
-                  <p>現在: {skill.details[level]}</p>
-                  {!isMaxLevel && (
-                    <p className="text-green-600">次レベル: {skill.details[level + 1]}</p>
-                  )}
-                </div>
+                {isMaxLevel && (
+                  <div className="text-xs text-green-600 font-semibold">
+                    ✨ 最大レベル達成！
+                  </div>
+                )}
               </div>
             );
           })}
