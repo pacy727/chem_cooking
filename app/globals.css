@@ -3,6 +3,11 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --background: #FFF7ED;
+  --foreground: #171717;
+}
+
 body {
   font-family: 'Inter', 'Noto Sans JP', sans-serif;
   background-color: #FFF7ED; /* 暖かい背景色 */

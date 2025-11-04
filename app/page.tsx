@@ -2,15 +2,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { UserData, GameScreen } from '../lib/types';
+import { UserData, GameScreen as GameScreenType } from '../lib/types';
 import { loadUserData } from '../lib/utils/gameUtils';
 import LoginScreen from './components/screens/LoginScreen';
 import HomeScreen from './components/screens/HomeScreen';
-import GameScreen from './components/screens/GameScreen';
+import GameScreenComponent from "./components/screens/GameScreen";
 import { Toaster } from 'react-hot-toast';
 
 export default function ChemicalKitchenPage() {
-  const [currentScreen, setCurrentScreen] = useState<GameScreen>('login');
+  const [currentScreen, setCurrentScreen] = useState<GameScreenType>('login');
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
   const [isGuestMode, setIsGuestMode] = useState(false);
 
@@ -70,7 +70,7 @@ export default function ChemicalKitchenPage() {
       )}
       
       {currentScreen === 'game' && (
-        <GameScreen 
+        <GameScreenComponent 
           userData={currentUser}
           isGuestMode={isGuestMode}
           onReturnHome={handleReturnHome}
