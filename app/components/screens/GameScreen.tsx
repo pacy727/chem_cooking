@@ -4,7 +4,15 @@
 import { useState, useEffect } from 'react';
 import { UserData, Order, Recipe, FilterCategory } from '../../../lib/types';
 import { RECIPES, CUSTOMERS } from '../../../lib/data/gameData';
-import { calculateReaction, calculateLevelUp, saveUserData, getExpForLevel, checkFailureForgiveness } from '../../../lib/utils/gameUtils';
+import { 
+  calculateReaction, 
+  calculateLevelUp, 
+  saveUserData, 
+  getExpForLevel, 
+  checkFailureForgiveness,
+  calculateRecipeCost,
+  checkVipCustomer
+} from '../../../lib/utils/gameUtils';
 import Pantry from '../game/Pantry';
 import ChemiPot from '../game/ChemiPot';
 import OrderDisplay from '../game/OrderDisplay';
@@ -70,10 +78,10 @@ export default function GameScreen({
     const customer = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
     const targetMol = parseFloat((Math.random() * 3 + 1).toFixed(1));
     
-    // レジェンドオーダー判定
+    // VIP客来店判定（口コミ評価スキル）
     let isLegend = false;
-    if (userData && userData.level >= 10 && Math.random() < 0.03) {
-      isLegend = true;
+    if (userData && userData.level >= 10) {
+      isLegend = checkVipCustomer(userData);
     }
     
     const order: Order = {
@@ -130,12 +138,14 @@ export default function GameScreen({
   };
 
   const buyRecipe = () => {
-    if (money < 500) {
-      toast.error('お金が足りません！レシピは500円です。');
+    const recipeCost = calculateRecipeCost(userData);
+    
+    if (money < recipeCost) {
+      toast.error(`お金が足りません！レシピは${recipeCost}円です。`);
       return;
     }
     
-    updateMoney(-500);
+    updateMoney(-recipeCost);
     setShowRecipeHint(true);
     toast.success('レシピを購入しました！');
   };
@@ -154,7 +164,7 @@ export default function GameScreen({
     setTimeout(() => {
       const result = calculateReaction(potContents, currentRecipe, currentOrder, userData);
       
-      // 失敗許容スキルチェック
+      // 失敗許容スキルチェック（シェフの人柄）
       if (userData && result.bonusRate <= 0) {
         if (checkFailureForgiveness(userData)) {
           toast.success('シェフの腕が光った！ (スキル発動)\n「もう一度チャンスをあげるヨ！」', {
@@ -267,6 +277,8 @@ export default function GameScreen({
     onUserDataUpdate(updatedUserData);
     saveUserData(updatedUserData);
   };
+
+  const recipeCost = calculateRecipeCost(userData);
 
   return (
     <>
@@ -381,7 +393,7 @@ export default function GameScreen({
                   onClick={buyRecipe}
                   className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition"
                 >
-                  💡 レシピを購入 (500円)
+                  💡 レシピを購入 ({recipeCost}円)
                 </button>
               </div>
             )}

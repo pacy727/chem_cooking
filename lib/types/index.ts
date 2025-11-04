@@ -34,10 +34,12 @@ export interface UserData {
   totalSales: number;
   rank: 'apprentice' | 'intermediate' | 'expert' | 'master' | 'legend';
   skills: {
-    cost_reduction: number;
-    material_recovery: number;
-    failure_forgiveness: number;
-    exp_multiplier: number;
+    cost_reduction: number;        // 仕入れ上手：材料費削減
+    recipe_discount: number;       // レシピ研究：レシピ購入費削減
+    hospitality: number;          // おもてなし：成功時ボーナス倍率
+    chef_personality: number;     // シェフの人柄：失敗時再挑戦率
+    word_of_mouth: number;        // 口コミ評価：VIP客来店率
+    salvage: number;              // サルベージ：材料回収返金率
   };
   skillPoints: number;
   achievements: string[];

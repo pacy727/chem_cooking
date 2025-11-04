@@ -1,7 +1,15 @@
 // lib/utils/gameUtils.ts
 
 import { UserData, ReactionResult, Recipe, Order } from '../types';
-import { INGREDIENTS, SKILL_COST_REDUCTION, SKILL_RECOVERY_CHANCE, SKILL_FORGIVENESS_CHANCE, SKILL_EXP_MULTIPLIER } from '../data/gameData';
+import { 
+  INGREDIENTS, 
+  SKILL_COST_REDUCTION, 
+  SKILL_RECIPE_DISCOUNT,
+  SKILL_HOSPITALITY,
+  SKILL_CHEF_PERSONALITY,
+  SKILL_WORD_OF_MOUTH,
+  SKILL_SALVAGE
+} from '../data/gameData';
 
 // ユーザーデータ管理
 export function createDefaultUserData(storeName: string, chefName: string): UserData {
@@ -14,10 +22,12 @@ export function createDefaultUserData(storeName: string, chefName: string): User
     totalSales: 0,
     rank: 'apprentice',
     skills: {
-      cost_reduction: 0,
-      material_recovery: 0,
-      failure_forgiveness: 0,
-      exp_multiplier: 0
+      cost_reduction: 0,        // 仕入れ上手
+      recipe_discount: 0,       // レシピ研究  
+      hospitality: 0,          // おもてなし
+      chef_personality: 0,     // シェフの人柄
+      word_of_mouth: 0,        // 口コミ評価
+      salvage: 0,              // サルベージ
     },
     skillPoints: 0,
     achievements: [],
@@ -53,10 +63,7 @@ export function getExpForLevel(level: number): number {
 }
 
 export function calculateLevelUp(userData: UserData, expGain: number): { leveledUp: boolean; newLevel: number; skillPointsGained: number } {
-  const expMultiplier = SKILL_EXP_MULTIPLIER[userData.skills.exp_multiplier] || 1.0;
-  const actualExp = Math.floor(expGain * expMultiplier);
-  
-  userData.exp += actualExp;
+  userData.exp += expGain;
   let leveledUp = false;
   let skillPointsGained = 0;
   
@@ -78,6 +85,59 @@ export function calculateRank(level: number, totalSales: number): UserData['rank
   if (level >= 10 && totalSales >= 20000) return 'expert';
   if (level >= 5 && totalSales >= 5000) return 'intermediate';
   return 'apprentice';
+}
+
+// 材料費計算（スキル効果適用）
+export function calculateIngredientCost(formula: string, amount: number, userData: UserData | null): number {
+  const ingredient = INGREDIENTS[formula];
+  let cost = ingredient.price * amount;
+  
+  if (userData) {
+    const reductionRate = SKILL_COST_REDUCTION[userData.skills.cost_reduction] || 0;
+    cost *= (1 - reductionRate);
+  }
+  
+  return cost;
+}
+
+// レシピ購入費計算（スキル効果適用）
+export function calculateRecipeCost(userData: UserData | null): number {
+  if (!userData) return 500; // デフォルト価格
+  
+  return SKILL_RECIPE_DISCOUNT[userData.skills.recipe_discount] || 500;
+}
+
+// 材料サルベージ判定
+export function attemptSalvage(formula: string, amount: number, userData: UserData | null): { success: boolean; recoveredAmount: number } {
+  let recoveryRate = 0.5; // 基本50%
+  
+  if (userData) {
+    recoveryRate = SKILL_SALVAGE[userData.skills.salvage] || 0;
+  }
+  
+  const success = recoveryRate > 0 && Math.random() < 0.7; // 70%の確率で回収判定
+  const recoveredAmount = success ? calculateIngredientCost(formula, amount, userData) * recoveryRate : 0;
+  
+  return { success, recoveredAmount };
+}
+
+// 失敗許容判定（シェフの人柄スキル）
+export function checkFailureForgiveness(userData: UserData | null): boolean {
+  if (!userData) return false;
+  
+  const forgivenessChance = SKILL_CHEF_PERSONALITY[userData.skills.chef_personality] || 0;
+  
+  return Math.random() < forgivenessChance;
+}
+
+// VIP客来店判定（口コミ評価スキル）
+export function checkVipCustomer(userData: UserData | null): boolean {
+  if (!userData) return false;
+  
+  const vipRate = SKILL_WORD_OF_MOUTH[userData.skills.word_of_mouth] || 1.0;
+  const baseVipChance = 0.03; // 基本3%
+  
+  return Math.random() < (baseVipChance * vipRate);
 }
 
 // 化学反応計算
@@ -162,11 +222,10 @@ export function calculateReaction(
     mols: productMols
   };
   
-  // 材料費回収計算
+  // 材料費回収計算（サルベージスキル）
   let totalCost = 0;
   if (userData) {
-    const recoveryLevel = userData.skills.material_recovery;
-    const recoveryChance = SKILL_RECOVERY_CHANCE[recoveryLevel] || 0;
+    const salvageRate = SKILL_SALVAGE[userData.skills.salvage] || 0;
     
     for (const [formula, required] of Object.entries(requiredReactants)) {
       const used = required * limitingMol;
@@ -178,8 +237,8 @@ export function calculateReaction(
         price *= (1 - reductionRate);
       }
       
-      if (Math.random() < recoveryChance) {
-        totalCost += price * used * 0.3;
+      if (salvageRate > 0 && Math.random() < 0.7) { // 70%の確率でサルベージ
+        totalCost += price * used * salvageRate;
       }
     }
   }
@@ -216,6 +275,12 @@ export function calculateReaction(
     resultCode = 'EXCESS_TOO_MUCH';
   }
   
+  // おもてなしスキルでボーナス倍率適用
+  if (userData && bonusRate > 0) {
+    const hospitalityMultiplier = SKILL_HOSPITALITY[userData.skills.hospitality] || 1.0;
+    bonusRate *= hospitalityMultiplier;
+  }
+  
   return {
     success: bonusRate > 0,
     code: resultCode,
@@ -248,42 +313,4 @@ function handleSpecialReactions(potContents: Record<string, number>) {
   }
   
   return extras;
-}
-
-// 材料費計算（スキル効果適用）
-export function calculateIngredientCost(formula: string, amount: number, userData: UserData | null): number {
-  const ingredient = INGREDIENTS[formula];
-  let cost = ingredient.price * amount;
-  
-  if (userData) {
-    const reductionRate = SKILL_COST_REDUCTION[userData.skills.cost_reduction] || 0;
-    cost *= (1 - reductionRate);
-  }
-  
-  return cost;
-}
-
-// 材料サルベージ判定
-export function attemptSalvage(formula: string, amount: number, userData: UserData | null): { success: boolean; recoveredAmount: number } {
-  let recoveryChance = 0.5; // 基本50%
-  
-  if (userData) {
-    const skillLevel = userData.skills.material_recovery;
-    recoveryChance = SKILL_RECOVERY_CHANCE[skillLevel] || 0.5;
-  }
-  
-  const success = Math.random() < recoveryChance;
-  const recoveredAmount = success ? calculateIngredientCost(formula, amount, userData) * 0.7 : 0;
-  
-  return { success, recoveredAmount };
-}
-
-// 失敗許容判定
-export function checkFailureForgiveness(userData: UserData | null): boolean {
-  if (!userData) return false;
-  
-  const forgivenessLevel = userData.skills.failure_forgiveness;
-  const forgivenessChance = SKILL_FORGIVENESS_CHANCE[forgivenessLevel] || 0;
-  
-  return Math.random() < forgivenessChance;
 }

@@ -163,8 +163,10 @@ export const CUSTOMERS: Customer[] = [
   { name: 'シェフ・ソルト', avatar: '👨‍🍳', order: '「食塩を作って」', personality: 'passionate' }
 ];
 
-// スキル効果定数
-export const SKILL_COST_REDUCTION = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
-export const SKILL_RECOVERY_CHANCE = [0, 0.2, 0.35, 0.5, 0.7, 0.9];
-export const SKILL_FORGIVENESS_CHANCE = [0, 0.1, 0.2, 0.35, 0.5, 0.7];
-export const SKILL_EXP_MULTIPLIER = [1.0, 1.2, 1.5, 1.8, 2.2, 2.7];
+// スキル効果定数（lv0→lv1→lv2→lv3）
+export const SKILL_COST_REDUCTION = [0, 0.05, 0.1, 0.2];           // 仕入れ上手：材料費削減
+export const SKILL_RECIPE_DISCOUNT = [300, 200, 100, 50];          // レシピ研究：レシピ購入費
+export const SKILL_HOSPITALITY = [1.0, 1.2, 1.5, 2.0];           // おもてなし：成功時ボーナス倍率
+export const SKILL_CHEF_PERSONALITY = [0, 0.1, 0.2, 0.3];         // シェフの人柄：失敗時再挑戦率
+export const SKILL_WORD_OF_MOUTH = [1.0, 1.5, 2.0, 3.0];         // 口コミ評価：VIP客来店率
+export const SKILL_SALVAGE = [0, 0.1, 0.5, 0.8];                 // サルベージ：材料回収返金率
