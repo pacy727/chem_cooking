@@ -2,10 +2,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { UserData, Order, Recipe, FilterCategory } from '../../../lib/types';
+import { UserData, Order, Recipe } from '../../../lib/types';
 import { RECIPES, CUSTOMERS, INGREDIENTS } from '../../../lib/data/gameData';
+import { findReaction, calculateReactionMols } from '../../../lib/data/reactions';
+import { generateLevelBasedOrder, LevelBasedOrder, CUSTOMER_TYPES } from '../../../lib/data/levelBasedOrders';
 import { 
-  calculateReaction, 
   calculateLevelUp, 
   saveUserData, 
   getExpForLevel, 
@@ -15,6 +16,7 @@ import {
 } from '../../../lib/utils/gameUtils';
 import SkillModal from '../modals/SkillModal';
 import IngredientModal from '../modals/IngredientModal';
+import ChefCommentModal from '../modals/ChefCommentModal';
 import Pantry from '../game/Pantry';
 import ChemiPot from '../game/ChemiPot';
 import { Star, Home, LogOut } from 'lucide-react';
@@ -37,17 +39,20 @@ export default function GameScreen({
 }: GameScreenProps) {
   const [money, setMoney] = useState(userData?.money || 5000);
   const [potContents, setPotContents] = useState<Record<string, number>>({});
-  const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
-  const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
+  const [currentOrder, setCurrentOrder] = useState<LevelBasedOrder | null>(null);
+  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [reactionCompleted, setReactionCompleted] = useState(false); // 反応完了フラグ
+  const [materialCosts, setMaterialCosts] = useState<number>(0); // 材料費追跡
   const [lastResult, setLastResult] = useState<any>(null);
   const [showRecipeHint, setShowRecipeHint] = useState(false);
-  const [filterCategory, setFilterCategory] = useState<'all' | 'gas' | 'solution' | 'solid' | 'metal'>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'gas' | 'solution' | 'solid' | 'metal' | 'organic'>('all');
   
   // モーダル状態
   const [showSkillModal, setShowSkillModal] = useState(false);
   const [showIngredientModal, setShowIngredientModal] = useState(false);
+  const [showChefCommentModal, setShowChefCommentModal] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<{ formula: string; ingredient: any } | null>(null);
 
   // お皿表示状態（統合版）
@@ -68,10 +73,9 @@ export default function GameScreen({
   }, [userData]);
 
   const generateOrder = () => {
-    const recipes = Object.values(RECIPES);
-    const recipe = recipes[Math.floor(Math.random() * recipes.length)];
-    const customer = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
-    const targetMol = parseFloat((Math.random() * 3 + 1).toFixed(1));
+    // ユーザーレベルに基づいて注文を生成
+    const userLevel = userData?.level || 1;
+    const order = generateLevelBasedOrder(userLevel, userData); // userDataも渡す
     
     // 水溶液の濃度をランダム生成
     setCurrentConcentrations(generateConcentrations());
@@ -82,17 +86,24 @@ export default function GameScreen({
       isLegend = checkVipCustomer(userData);
     }
     
-    const order: Order = {
-      customer,
-      targetMol,
-      recipe,
-      bonusMultiplier: isLegend ? 5.0 : 1.0,
+    // 基本ボーナスにVIPボーナスを適用
+    const bonusMultiplier = isLegend ? 5.0 : 1.0;
+    const enhancedOrder: LevelBasedOrder = {
+      ...order,
+      bonusMultiplier,
       isLegend
     };
     
-    setCurrentOrder(order);
-    setCurrentRecipe(recipe);
+    setCurrentOrder(enhancedOrder);
+    setCurrentRecipe(order.reaction as any); // 反応データをレシピとして使用（型キャスト）
     setShowRecipeHint(false);
+    setReactionCompleted(false); // 反応ボタンを再有効化
+    
+    // デバッグ用：客タイプと倍率を確認
+    const wordOfMouthLevel = userData?.skills?.word_of_mouth || 0;
+    const vipMultipliers = [1.0, 1.5, 2.0, 3.0];
+    const vipMultiplier = vipMultipliers[Math.min(wordOfMouthLevel, 3)];
+    console.log(`注文生成: ${order.customerType} - mol倍率: ${CUSTOMER_TYPES[order.customerType].molMultiplier}, ボーナス倍率: ${CUSTOMER_TYPES[order.customerType].bonusMultiplier}, 口コミ評価Lv${wordOfMouthLevel}(VIP確率×${vipMultiplier})`);
     resetPlate();
   };
 
@@ -101,6 +112,7 @@ export default function GameScreen({
     setPlateUnreacted([]);
     setCustomerFeedbackMsg('');
     setShowResults(false);
+    setMaterialCosts(0); // 材料費もリセット
   };
 
   const updateMoney = (change: number) => {
@@ -114,37 +126,175 @@ export default function GameScreen({
     }
   };
 
+  // 新しい反応計算システム
+  const calculateNewReaction = (
+    potContents: Record<string, number>,
+    recipe: any, // ChemicalReaction型
+    order: LevelBasedOrder,
+    userData: UserData | null
+  ) => {
+    const substances = Object.keys(potContents);
+    const [formula1, formula2] = substances;
+    const mol1 = potContents[formula1];
+    const mol2 = potContents[formula2] || 0;
+    
+    // 反応の検索（レベル制限なし）
+    const reaction = findReaction(formula1, formula2);
+    
+    if (!reaction) {
+      // 反応しない場合
+      return {
+        success: false,
+        code: 'NO_REACTION',
+        bonusRate: 0,
+        totalCost: 0,
+        unreacted: substances.map(formula => ({
+          formula,
+          name: INGREDIENTS[formula]?.name || formula,
+          mols: potContents[formula]
+        })),
+        chefComment: `${formula1}と${formula2}は反応しません。適切な組み合わせを選んでください。`,
+        reaction: null
+      };
+    }
+    
+    // 反応計算
+    const reactionResult = calculateReactionMols(reaction, mol1, mol2, formula1, formula2);
+    
+    // 注文との比較（生成物の中に注文品があるかチェック）
+    const targetProduct = order.targetProduct; // 直接化学式を使用
+    const targetMol = order.targetMol;
+    
+    let bonusRate = 0;
+    let success = false;
+    let orderMatch = false;
+    
+    // 生成物の中に注文品があるかチェック
+    const matchingProduct = reactionResult.producedMols.find(p => p.formula === targetProduct);
+    
+    if (matchingProduct) {
+      orderMatch = true;
+      const productMol = matchingProduct.mols;
+      const difference = Math.abs(productMol - targetMol);
+      
+      if (difference <= 0.01) {
+        bonusRate = 1.0;
+        success = true;
+      } else if (difference <= targetMol * 0.1) {
+        bonusRate = 0.8;
+        success = true;
+      } else if (difference <= targetMol * 0.3) {
+        bonusRate = 0.5;
+        success = true;
+      } else {
+        bonusRate = 0.2;
+        success = true;
+      }
+    }
+    
+    // おもてなしスキルでボーナス倍率適用
+    if (userData && bonusRate > 0) {
+      const hospitalityLevel = userData.skills?.hospitality || 0;
+      const hospitalityMultipliers = [1.0, 1.2, 1.5, 2.0];
+      bonusRate *= hospitalityMultipliers[hospitalityLevel] || 1.0;
+    }
+    
+    return {
+      success,
+      code: success ? 'REACTION_SUCCESS' : 'REACTION_MISMATCH',
+      bonusRate,
+      totalCost: 0,
+      reaction: reaction,
+      reactionResult: reactionResult,
+      orderMatch,
+      targetProduct,
+      targetMol,
+      chefComment: generateChefComment(reaction, reactionResult, orderMatch, success, bonusRate)
+    };
+  };
+  
+  // シェフコメント生成
+  const generateChefComment = (
+    reaction: any,
+    reactionResult: any,
+    orderMatch: boolean,
+    success: boolean,
+    bonusRate: number
+  ) => {
+    if (!orderMatch) {
+      return `${reaction.equation}の反応が起こりましたが、注文された物質ではありませんね。注文をよく確認してください。`;
+    }
+    
+    if (bonusRate >= 1.0) {
+      return `完璧です！${reaction.equation}の反応で正確な量の生成物ができました。化学量論の計算が正確でした。`;
+    } else if (bonusRate >= 0.8) {
+      return `良い結果です。${reaction.equation}の反応は成功しましたが、量が少し違います。mol計算を見直してみましょう。`;
+    } else if (bonusRate >= 0.5) {
+      return `反応は起こりましたが、生成量に問題があります。制限反応剤の概念を理解して、正確なmol計算をしましょう。`;
+    } else {
+      return `反応は確認できましたが、注文量との差が大きすぎます。化学量論比を正確に計算してください。`;
+    }
+  };
+
   // 原子量・分子量の定数（g/mol）
   const MOLAR_MASSES: Record<string, number> = {
     // 気体
-    'O2': 32,    // 酸素
-    'H2': 2,     // 水素
-    'CO2': 44,   // 二酸化炭素
-    'N2': 28,    // 窒素
-    'Cl2': 71,   // 塩素
-    'NH3': 17,   // アンモニア
+    'H₂': 2,     // 水素
+    'O₂': 32,    // 酸素
+    'N₂': 28,    // 窒素
+    'Cl₂': 71,   // 塩素
+    'NH₃': 17,   // アンモニア
+    'CO₂': 44,   // 二酸化炭素
+    'NO': 30,    // 一酸化窒素
+    'NO₂': 46,   // 二酸化窒素
+    'SO₂': 64,   // 二酸化硫黄
+    'H₂S': 34,   // 硫化水素
+    'HF': 20,    // フッ化水素
+    'Br₂': 160,  // 臭素
     
     // 水溶液（溶質の分子量）
     'HCl': 36,      // 塩酸
-    'H2SO4': 98,    // 硫酸
-    'HNO3': 63,     // 硝酸
+    'H₂SO₄': 98,    // 硫酸
+    'HNO₃': 63,     // 硝酸
+    'CH₃COOH': 60,  // 酢酸
     'NaOH': 40,     // 水酸化ナトリウム
-    'H2O': 18,      // 水
+    'KOH': 56,      // 水酸化カリウム
+    'Ca(OH)₂': 74,  // 水酸化カルシウム
+    'Al(OH)₃': 78,  // 水酸化アルミニウム
+    'Mg(OH)₂': 58,  // 水酸化マグネシウム
+    'Ba(OH)₂': 171, // 水酸化バリウム
+    'H₂O': 18,      // 水
     
     // 固体
     'NaCl': 58,     // 塩化ナトリウム
-    'CaCO3': 100,   // 炭酸カルシウム
+    'CaCO₃': 100,   // 炭酸カルシウム
+    'MnO₂': 87,     // 二酸化マンガン
+    'KI': 166,      // ヨウ化カリウム
+    'KMnO₄': 158,   // 過マンガン酸カリウム
+    'Fe₂O₃': 160,   // 酸化鉄(III)
+    'P₄': 124,      // リン
     'C': 12,        // 炭素
     'S': 32,        // 硫黄
-    'I2': 254,      // ヨウ素
+    'I₂': 254,      // ヨウ素
     
     // 金属
-    'Fe': 56,       // 鉄
-    'Cu': 64,       // 銅
-    'Zn': 65,       // 亜鉛
-    'Al': 27,       // アルミニウム
     'Mg': 24,       // マグネシウム
-    'Na': 23        // ナトリウム
+    'Al': 27,       // アルミニウム
+    'Zn': 65,       // 亜鉛
+    'Fe': 56,       // 鉄
+    'Ca': 40,       // カルシウム
+    'Cu': 64,       // 銅
+    'Na': 23,       // ナトリウム
+    'Ag': 108,      // 銀
+    
+    // 有機化合物
+    'CH₄': 16,      // メタン
+    'C₂H₆': 30,     // エタン
+    'C₃H₈': 44,     // プロパン
+    'C₂H₄': 28,     // エチレン
+    'C₂H₂': 26,     // アセチレン
+    'C₆H₆': 78,     // ベンゼン
+    'C₄H₁₀': 58     // ブタン
   };
 
   // 水溶液の濃度選択肢（mol/L）
@@ -184,6 +334,14 @@ export default function GameScreen({
   };
 
   const addToPot = (formula: string, amount: number, unit: string) => {
+    // ケミ鍋の2物質制限チェック
+    const currentSubstances = Object.keys(potContents);
+    if (currentSubstances.length >= 2 && !currentSubstances.includes(formula)) {
+      toast.error('ケミ鍋には2種類の物質までしか入れられません！\n既存の物質を回収してから追加してください。');
+      setShowIngredientModal(false);
+      return;
+    }
+    
     const molAmount = convertToMol(amount, unit, formula);
     const cost = molAmount * 100; // 100円/mol
     
@@ -193,6 +351,7 @@ export default function GameScreen({
     }
     
     updateMoney(-cost);
+    setMaterialCosts(prev => prev + cost); // 材料費を記録
     setPotContents(prev => ({
       ...prev,
       [formula]: (prev[formula] || 0) + molAmount
@@ -203,17 +362,18 @@ export default function GameScreen({
     // 詳細情報付きトースト
     if (unit === 'mL') {
       const concentration = currentConcentrations[formula] || 1.0;
-      toast.success(`${formula} ${molAmount.toFixed(3)} mol を追加しました！\n(${concentration}M × ${amount}mL)`);
+      toast.success(`${formula} ${Number(molAmount).toFixed(3)} mol を追加しました！\n(${concentration}M × ${amount}mL)`);
     } else if (unit === 'g') {
       const molarMass = MOLAR_MASSES[formula] || 100;
-      toast.success(`${formula} ${molAmount.toFixed(3)} mol を追加しました！\n(${amount}g ÷ ${molarMass}g/mol)`);
+      toast.success(`${formula} ${Number(molAmount).toFixed(3)} mol を追加しました！\n(${amount}g ÷ ${molarMass}g/mol)`);
     } else {
-      toast.success(`${formula} ${molAmount.toFixed(3)} mol を追加しました！`);
+      toast.success(`${formula} ${Number(molAmount).toFixed(3)} mol を追加しました！`);
     }
   };
 
   const clearPot = () => {
     setPotContents({});
+    setMaterialCosts(0); // 材料費もリセット
   };
 
   const buyRecipe = () => {
@@ -230,10 +390,16 @@ export default function GameScreen({
   };
 
   const performReaction = async () => {
-    if (isProcessing || !currentOrder || !currentRecipe) return;
+    if (isProcessing || !currentOrder || !currentRecipe || reactionCompleted) return;
     
-    if (Object.keys(potContents).length === 0) {
+    const substances = Object.keys(potContents);
+    if (substances.length === 0) {
       toast.error('材料を入れてください！');
+      return;
+    }
+    
+    if (substances.length === 1) {
+      toast.error('反応には2種類の物質が必要です！');
       return;
     }
     
@@ -241,7 +407,7 @@ export default function GameScreen({
     
     // 反応計算を少し遅延させて演出
     setTimeout(() => {
-      const result = calculateReaction(potContents, currentRecipe, currentOrder, userData);
+      const result = calculateNewReaction(potContents, currentRecipe, currentOrder, userData);
       
       // 失敗許容スキルチェック（シェフの人柄）
       if (userData && result.bonusRate <= 0) {
@@ -262,48 +428,59 @@ export default function GameScreen({
 
   const clearPotWithoutOrder = () => {
     setPotContents({});
+    setMaterialCosts(0); // 材料費もリセット
     resetPlate();
   };
 
   const showReactionResult = (result: any) => {
     setLastResult(result);
+    setReactionCompleted(true); // 反応ボタンを無効化
     
     let feedbackMsg = '';
     let moneyChange = 0;
     
     if (currentOrder) {
-      const baseBonus = 1000 * currentOrder.bonusMultiplier;
-      moneyChange = baseBonus * result.bonusRate;
+      const baseBonus = 1000;
+      const customerMultiplier = currentOrder.bonusMultiplier || 1.0;
+      const orderBonus = baseBonus * result.bonusRate * customerMultiplier;
+      
+      // 成功時は材料費も返却
+      const materialRefund = result.bonusRate > 0 ? materialCosts : 0;
+      moneyChange = orderBonus + materialRefund;
     }
     
-    // お皿の表示を更新（統合版）
+    // お皿の表示を更新（新しい反応システム対応）
     const products: Array<{ name: string; amount: number; formula: string }> = [];
     const unreacted: Array<{ name: string; amount: number; formula: string }> = [];
     
-    if (result.success && result.product) {
-      products.push({
-        name: result.product.name,
-        amount: result.product.mols,
-        formula: currentRecipe?.product.name.split(' ')[0] || 'Unknown'
+    if (result.code === 'NO_REACTION') {
+      // 反応しない場合、すべて未反応として表示
+      result.unreacted?.forEach((item: any) => {
+        unreacted.push({
+          name: item.name,
+          amount: item.mols,
+          formula: item.formula
+        });
       });
-    }
-    
-    // 未反応物質の表示
-    if (result.excess) {
-      unreacted.push({
-        name: result.excess.name,
-        amount: result.excess.mols,
-        formula: 'Excess'
-      });
-    }
-    
-    // 副生成物の表示
-    if (result.extras) {
-      result.extras.forEach((extra: any) => {
+    } else if (result.reactionResult) {
+      // 新しい反応システムの結果処理
+      const reactionResult = result.reactionResult;
+      
+      // 生成物の表示
+      reactionResult.producedMols?.forEach((product: any) => {
         products.push({
-          name: extra.name,
-          amount: extra.mols,
-          formula: extra.name.split(' ')[0]
+          name: getProductDisplayName(product.formula),
+          amount: product.mols,
+          formula: product.formula
+        });
+      });
+      
+      // 未反応物質の表示
+      reactionResult.remainingMols?.forEach((remaining: any) => {
+        unreacted.push({
+          name: getProductDisplayName(remaining.formula),
+          amount: remaining.mols,
+          formula: remaining.formula
         });
       });
     }
@@ -331,47 +508,150 @@ export default function GameScreen({
       saveUserData(userData);
     }
     
-    // お客様の反応
+    // お客様の詳細な反応メッセージ
     if (result.bonusRate > 0) {
-      if (result.code === 'PERFECT') {
-        feedbackMsg = '「おいしい～！」';
-      } else if (result.code === 'EXCESS_SLIGHT') {
-        const msg = result.product.mols > (currentOrder?.targetMol || 0) ? 
-          "勝手に大盛にするナ！" : "勝手に小盛にするナ！";
-        feedbackMsg = `「${msg}」`;
-      } else if (result.code === 'EXCESS_LARGE') {
-        feedbackMsg = '「ムチャクチャナ量ダヨ！」';
+      if (result.code === 'REACTION_SUCCESS') {
+        if (result.bonusRate >= 1.0) {
+          feedbackMsg = '「完璧です！おいしい～！」';
+        } else if (result.bonusRate >= 0.8) {
+          feedbackMsg = '「良いですネ！少し量が違うけど...」';
+        } else if (result.bonusRate >= 0.5) {
+          feedbackMsg = '「まあまあですネ。」';
+        } else {
+          feedbackMsg = '「う～ん、微妙デス...」';
+        }
       }
       
-      if (result.totalCost > 0) {
-        updateMoney(result.totalCost);
-        feedbackMsg += `\n(材料費 ${result.totalCost.toFixed(0)}円 が戻ってきました！)`;
+      // 未反応物質がある場合の追加コメント
+      if (unreacted.length > 0) {
+        const unreactedList = unreacted.map(item => `${item.formula} ${Number(item.amount).toFixed(2)} mol`).join(', ');
+        feedbackMsg += `\n（${unreactedList} が残っています）`;
+      }
+      
+      // 報酬の内訳を表示
+      if (currentOrder) {
+        const baseBonus = 1000;
+        const customerMultiplier = currentOrder.bonusMultiplier || 1.0;
+        const orderBonus = baseBonus * result.bonusRate * customerMultiplier;
+        const materialRefund = result.bonusRate > 0 ? materialCosts : 0;
+        
+        if (materialRefund > 0) {
+          feedbackMsg += `\n注文報酬: +${Number(orderBonus).toFixed(0)}円`;
+          feedbackMsg += `\n材料費返却: +${Number(materialRefund).toFixed(0)}円`;
+          feedbackMsg += `\n合計: +${Number(moneyChange).toFixed(0)}円`;
+        } else {
+          feedbackMsg += `\n+${Number(moneyChange).toFixed(0)}円`;
+        }
+      } else {
+        feedbackMsg += `\n+${Number(moneyChange).toFixed(0)}円`;
       }
     } else {
-      feedbackMsg = '「買えりマス。」';
-      
-      // 失敗理由の表示
-      if (result.code === 'MISSING_STUFF') {
-        feedbackMsg += '\n（材料が足りません...）';
-      } else if (result.code === 'EXCESS_MATERIAL') {
-        feedbackMsg += `\n（${result.excess.name} が ${result.excess.mols.toFixed(2)} mol 余っています...）`;
+      if (result.code === 'NO_REACTION') {
+        feedbackMsg = '「反応しませんネ...」';
+        feedbackMsg += '\n（これらの物質は反応しません）';
+      } else if (result.code === 'REACTION_MISMATCH') {
+        feedbackMsg = '「反応はしたけど、注文と違いマス...」';
+        if (result.reaction) {
+          feedbackMsg += `\n（${result.reaction.equation} の反応が起こりました）`;
+        }
+      } else {
+        feedbackMsg = '「買えりマス。」';
       }
+      
+      // 失敗理由の詳細表示
+      if (unreacted.length > 0) {
+        const unreactedList = unreacted.map(item => `${item.formula} ${Number(item.amount).toFixed(2)} mol`).join(', ');
+        feedbackMsg += `\n（${unreactedList} が混入しています...）`;
+      }
+      
+      feedbackMsg += '\n+0円';
     }
     
     setCustomerFeedbackMsg(feedbackMsg);
     
     if (moneyChange > 0) {
       updateMoney(moneyChange);
-      toast.success(`+${moneyChange.toFixed(0)}円 ボーナス！`);
     }
     
     setShowResults(true);
+  };
+
+  // 化学式から表示名を取得（showReactionResult用）
+  const getProductDisplayName = (formula: string): string => {
+    const names: Record<string, string> = {
+      // 気体
+      'H2': '水素',
+      'O2': '酸素',
+      'N2': '窒素',
+      'Cl2': '塩素',
+      'NH3': 'アンモニア',
+      'CO2': '二酸化炭素',
+      'NO': '一酸化窒素',
+      'NO2': '二酸化窒素',
+      'SO2': '二酸化硫黄',
+      'H2S': '硫化水素',
+      'HF': 'フッ化水素',
+      'Br2': '臭素',
+      
+      // 水溶液
+      'HCl': '塩化水素',
+      'H2SO4': '硫酸',
+      'HNO3': '硝酸',
+      'CH3COOH': '酢酸',
+      'NaOH': '水酸化ナトリウム',
+      'KOH': '水酸化カリウム',
+      'Ca(OH)2': '水酸化カルシウム',
+      'H2O': '水',
+      
+      // 固体・塩
+      'NaCl': '塩化ナトリウム',
+      'CaCO3': '炭酸カルシウム',
+      'ZnCl2': '塩化亜鉛',
+      'FeCl2': '塩化鉄(II)',
+      'MgCl2': '塩化マグネシウム',
+      'AlCl3': '塩化アルミニウム',
+      'ZnSO4': '硫酸亜鉛',
+      'FeSO4': '硫酸鉄(II)',
+      'MgSO4': '硫酸マグネシウム',
+      'CaCl2': '塩化カルシウム',
+      'CuO': '酸化銅(II)',
+      'Fe2O3': '酸化鉄(III)',
+      'MgO': '酸化マグネシウム',
+      'Al2O3': '酸化アルミニウム',
+      'Na2SO4': '硫酸ナトリウム',
+      'CH3COONa': '酢酸ナトリウム',
+      'KNO3': '硝酸カリウム',
+      'NH4Cl': '塩化アンモニウム',
+      'AgNO3': '硝酸銀',
+      
+      // 金属
+      'Mg': 'マグネシウム',
+      'Al': 'アルミニウム',
+      'Zn': '亜鉛',
+      'Fe': '鉄',
+      'Ca': 'カルシウム',
+      'Cu': '銅',
+      'Na': 'ナトリウム',
+      'Ag': '銀',
+      
+      // 有機化合物
+      'CH4': 'メタン',
+      'C2H6': 'エタン',
+      'C3H8': 'プロパン',
+      'C2H4': 'エチレン',
+      'C2H2': 'アセチレン',
+      'C6H6': 'ベンゼン',
+      'C4H10': 'ブタン'
+    };
+    
+    return names[formula] || formula;
   };
 
   const nextOrder = () => {
     clearPot();
     generateOrder();
     setFilterCategory('all');
+    setReactionCompleted(false); // 反応ボタンを再有効化
   };
 
   const retry = () => {
@@ -476,10 +756,14 @@ export default function GameScreen({
                 <div className="text-center mt-3">
                   <button 
                     onClick={performReaction}
-                    disabled={isProcessing}
-                    className="bg-red-600 text-white font-bold text-sm py-2 px-4 rounded shadow hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isProcessing || reactionCompleted}
+                    className={`font-bold text-sm py-3 px-8 rounded shadow transition w-full ${
+                      isProcessing || reactionCompleted
+                        ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                        : 'bg-red-600 text-white hover:bg-red-700'
+                    }`}
                   >
-                    {isProcessing ? '反応中...' : 'REACTION !!'}
+                    {isProcessing ? '反応中...' : reactionCompleted ? '反応完了' : 'REACTION !!'}
                   </button>
                 </div>
               </div>
@@ -490,18 +774,47 @@ export default function GameScreen({
               {/* 注文表示 */}
               <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: '25%' }}>
                 {currentOrder && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-blue-800 mb-2">👤 お客様のご注文</h3>
-                    <p className="text-base font-bold text-blue-900 mb-2">{currentOrder.customer.order}</p>
-                    <p className="text-sm text-blue-700">
-                      {currentOrder.recipe.product.name} を {currentOrder.targetMol.toFixed(1)} mol
-                    </p>
+                  <div className="h-full flex items-center">
+                    {/* 2カラムレイアウト */}
+                    <div className="flex gap-3 w-full">
+                      {/* 左側：客のアイコン（狭い） */}
+                      <div className="w-12 flex-shrink-0 flex items-center justify-center">
+                        <span className="text-3xl">{CUSTOMER_TYPES[currentOrder.customerType]?.emoji || '👨‍🔬'}</span>
+                      </div>
+                      
+                      {/* 右側：3行構成 */}
+                      <div className="flex-1 flex flex-col justify-center space-y-1">
+                        {/* 1行目：コメント */}
+                        <p className="text-sm text-gray-700 leading-tight">{currentOrder.customerComment}</p>
+                        
+                        {/* 2行目：オーダー（太字） */}
+                        <p className="text-base font-bold text-blue-900 leading-tight">{currentOrder.orderText}</p>
+                        
+                        {/* 3行目：客レア度 */}
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                            currentOrder.customerType === 'normal' ? 'bg-gray-100 text-gray-700' :
+                            currentOrder.customerType === 'rare' ? 'bg-blue-100 text-blue-700' :
+                            currentOrder.customerType === 'super rare' ? 'bg-purple-100 text-purple-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            [ {CUSTOMER_TYPES[currentOrder.customerType]?.displayName || 'Normal客'} ]
+                          </span>
+                          {currentOrder.bonusMultiplier && currentOrder.bonusMultiplier > 1 && (
+                            <span className="text-xs text-green-600 font-semibold">
+                              ボーナス×{currentOrder.bonusMultiplier}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                     
-                    {/* レジェンドオーダー表示 */}
-                    {currentOrder.isLegend && (
-                      <div className="mt-2 p-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded text-center">
-                        <span className="text-sm font-bold">✨ レジェンドオーダー ✨</span>
-                        <div className="text-sm">ボーナス5倍！</div>
+                    {/* 材料指定がある場合（下部に表示） */}
+                    {currentOrder.specialInstruction && (
+                      <div className="absolute bottom-1 left-3 right-3">
+                        <p className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                          材料指定: {currentOrder.specialInstruction}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -510,19 +823,26 @@ export default function GameScreen({
 
               {/* レシピエリア */}
               <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: '25%' }}>
-                <h3 className="text-sm font-semibold text-green-800 mb-2">📖 レシピ情報</h3>
+                <h3 className="text-sm font-semibold text-green-800 mb-2">📖 反応情報</h3>
                 <div className="h-full">
                   {showRecipeHint && currentRecipe ? (
                     <div className="p-3 bg-green-100 rounded-lg border border-green-300 h-full overflow-y-auto">
-                      <h4 className="text-base font-bold text-green-800 mb-3">{currentRecipe.name} の作り方</h4>
+                      <h4 className="text-base font-bold text-green-800 mb-3">反応の詳細</h4>
                       
                       <div className="mb-3">
-                        <h5 className="text-sm font-semibold text-green-700 mb-2">必要な材料:</h5>
+                        <h5 className="text-sm font-semibold text-green-700 mb-2">反応式:</h5>
+                        <p className="text-sm font-mono bg-white p-2 rounded border">
+                          {currentRecipe.equation}
+                        </p>
+                      </div>
+
+                      <div className="mb-3">
+                        <h5 className="text-sm font-semibold text-green-700 mb-2">必要な反応物:</h5>
                         <div className="space-y-1">
-                          {Object.entries(currentRecipe.reactants).map(([formula, amount]) => (
-                            <div key={formula} className="flex justify-between text-sm">
-                              <span className="text-green-700">{formula}</span>
-                              <span className="font-semibold text-green-800">{amount} mol</span>
+                          {currentRecipe.reactants?.map((reactant: any, index: number) => (
+                            <div key={index} className="flex justify-between text-sm">
+                              <span className="text-green-700">{reactant.formula}</span>
+                              <span className="font-semibold text-green-800">係数: {reactant.coefficient}</span>
                             </div>
                           ))}
                         </div>
@@ -530,24 +850,29 @@ export default function GameScreen({
 
                       <div className="mb-3">
                         <h5 className="text-sm font-semibold text-green-700 mb-2">生成物:</h5>
-                        <div className="text-sm text-green-700">
-                          <span className="font-semibold">{currentRecipe.product.name}</span>
+                        <div className="space-y-1">
+                          {currentRecipe.products?.map((product: any, index: number) => (
+                            <div key={index} className="flex justify-between text-sm">
+                              <span className="text-green-700">{product.formula}</span>
+                              <span className="font-semibold text-green-800">係数: {product.coefficient}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
 
                       <div>
-                        <h5 className="text-sm font-semibold text-green-700 mb-2">説明:</h5>
-                        <p className="text-sm text-green-600">{currentRecipe.description}</p>
+                        <h5 className="text-sm font-semibold text-green-700 mb-2">レベル:</h5>
+                        <p className="text-sm text-green-600">Level {currentRecipe.level}</p>
                       </div>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full">
-                      <p className="text-gray-500 italic text-sm mb-3">レシピを購入して詳細を確認しましょう</p>
+                      <p className="text-gray-500 italic text-sm mb-3">反応情報を購入して詳細を確認しましょう</p>
                       <button 
                         onClick={buyRecipe}
                         className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-yellow-600 transition shadow-md"
                       >
-                        💡 レシピを購入 ({recipeCost}円)
+                        💡 反応情報を購入 ({recipeCost}円)
                       </button>
                     </div>
                   )}
@@ -570,14 +895,14 @@ export default function GameScreen({
                           {plateProducts.map((product, index) => (
                             <div key={`product-${index}`} className="p-1.5 bg-green-50 rounded border border-green-200">
                               <span className="font-semibold text-green-700 text-sm">{product.formula}</span>
-                              <span className="text-green-600 ml-2 text-sm">{product.amount.toFixed(2)} mol</span>
+                              <span className="text-green-600 ml-2 text-sm">{Number(product.amount).toFixed(2)} mol</span>
                               <div className="text-sm text-gray-600 truncate">{product.name}</div>
                             </div>
                           ))}
                           {plateUnreacted.map((unreacted, index) => (
                             <div key={`unreacted-${index}`} className="p-1.5 bg-red-50 rounded border border-red-200">
                               <span className="font-semibold text-red-700 text-sm">{unreacted.formula}</span>
-                              <span className="text-red-600 ml-2 text-sm">{unreacted.amount.toFixed(2)} mol</span>
+                              <span className="text-red-600 ml-2 text-sm">{Number(unreacted.amount).toFixed(2)} mol</span>
                               <div className="text-sm text-gray-600 truncate">{unreacted.name}</div>
                             </div>
                           ))}
@@ -610,13 +935,13 @@ export default function GameScreen({
                           onClick={nextOrder}
                           className="w-full bg-green-600 text-white font-bold py-1.5 rounded hover:bg-green-700 transition text-sm"
                         >
-                          次のお客様 →
+                          次の注文へ →
                         </button>
                         <button 
-                          onClick={retry}
-                          className="w-full bg-blue-600 text-white font-bold py-1.5 rounded hover:bg-blue-700 transition text-sm"
+                          onClick={() => setShowChefCommentModal(true)}
+                          className="w-full bg-yellow-600 text-white font-bold py-1.5 rounded hover:bg-yellow-700 transition text-sm"
                         >
-                          リトライ
+                          👨‍🍳 シェフのコメント
                         </button>
                       </div>
                     )}
@@ -650,6 +975,14 @@ export default function GameScreen({
           molarMass={MOLAR_MASSES[selectedIngredient.formula]}
         />
       )}
+
+      {/* シェフのコメントモーダル */}
+      <ChefCommentModal 
+        isOpen={showChefCommentModal}
+        onClose={() => setShowChefCommentModal(false)}
+        lastResult={lastResult}
+        currentRecipe={currentRecipe}
+      />
     </>
   );
 }

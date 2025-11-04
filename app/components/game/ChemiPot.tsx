@@ -41,6 +41,25 @@ export default function ChemiPot({ contents, onSalvage, userData, isProcessing }
     }
   };
 
+  // 化学式の下付き数字変換関数
+  const formatChemicalFormula = (formula: string): string => {
+    if (formula.includes('₂') || formula.includes('₃') || formula.includes('₄')) {
+      return formula;
+    }
+    
+    return formula
+      .replace(/2/g, '₂')
+      .replace(/3/g, '₃')
+      .replace(/4/g, '₄')
+      .replace(/5/g, '₅')
+      .replace(/6/g, '₆')
+      .replace(/7/g, '₇')
+      .replace(/8/g, '₈')
+      .replace(/9/g, '₉')
+      .replace(/0/g, '₀')
+      .replace(/1/g, '₁');
+  };
+
   const itemsArray = Object.entries(contents);
   const itemCount = itemsArray.length;
 
@@ -58,39 +77,70 @@ export default function ChemiPot({ contents, onSalvage, userData, isProcessing }
           </div>
         </div>
         
-        {/* 投入した材料リスト */}
-        <div className="flex-1 h-20 bg-white rounded-lg shadow-md p-2 overflow-y-auto border border-orange-400">
-          {itemsArray.length === 0 ? (
-            <p className="text-gray-400 text-center italic text-sm">ここに材料が入ります</p>
-          ) : (
-            <div className="space-y-1">
-              {itemsArray.map(([formula, amount]) => {
-                const ingredient = INGREDIENTS[formula];
-                return (
-                  <div 
-                    key={formula}
-                    className="flex justify-between items-center bg-orange-50 p-1 rounded text-xs"
-                  >
-                    <div>
-                      <span className="font-semibold text-orange-800">{ingredient?.name || formula}</span>
-                      <span className="text-orange-600 ml-1">{amount.toFixed(2)} mol</span>
-                    </div>
-                    <button 
-                      onClick={() => handleSalvage(formula)}
-                      disabled={isProcessing}
-                      className={`text-xs font-semibold px-1.5 py-0.5 rounded transition ${
-                        isProcessing 
-                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          : 'bg-red-100 text-red-500 hover:bg-red-500 hover:text-white'
-                      }`}
-                    >
-                      回収
-                    </button>
+        {/* 投入した材料リスト - {□+□}デザイン */}
+        <div className="flex-1 h-20 bg-white rounded-lg shadow-md p-2 flex items-center justify-center">
+          <div className="flex items-center space-x-4">
+            {/* 材料1（左側） */}
+            <div className={`w-20 h-16 border-2 rounded-lg flex flex-col items-center justify-center text-xs ${
+              itemsArray[0] ? 'border-orange-400 bg-orange-50' : 'border-dashed border-gray-300 bg-gray-50'
+            }`}>
+              {itemsArray[0] ? (
+                <>
+                  <div className="font-semibold text-orange-800 leading-tight">
+                    {formatChemicalFormula(itemsArray[0][0])}
                   </div>
-                );
-              })}
+                  <div className="text-orange-600 text-xs">
+                    {Number(itemsArray[0][1]).toFixed(2)} mol
+                  </div>
+                  <button
+                    onClick={() => handleSalvage(itemsArray[0][0])}
+                    disabled={isProcessing}
+                    className={`text-xs font-semibold px-1 py-0.5 rounded mt-1 transition ${
+                      isProcessing 
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-100 text-red-500 hover:bg-red-500 hover:text-white'
+                    }`}
+                  >
+                    回収
+                  </button>
+                </>
+              ) : (
+                <span className="text-gray-400 text-lg">□</span>
+              )}
             </div>
-          )}
+            
+            {/* プラス記号 */}
+            <span className="text-xl font-bold text-gray-600">+</span>
+            
+            {/* 材料2（右側） */}
+            <div className={`w-20 h-16 border-2 rounded-lg flex flex-col items-center justify-center text-xs ${
+              itemsArray[1] ? 'border-orange-400 bg-orange-50' : 'border-dashed border-gray-300 bg-gray-50'
+            }`}>
+              {itemsArray[1] ? (
+                <>
+                  <div className="font-semibold text-orange-800 leading-tight">
+                    {formatChemicalFormula(itemsArray[1][0])}
+                  </div>
+                  <div className="text-orange-600 text-xs">
+                    {Number(itemsArray[1][1]).toFixed(2)} mol
+                  </div>
+                  <button
+                    onClick={() => handleSalvage(itemsArray[1][0])}
+                    disabled={isProcessing}
+                    className={`text-xs font-semibold px-1 py-0.5 rounded mt-1 transition ${
+                      isProcessing 
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-100 text-red-500 hover:bg-red-500 hover:text-white'
+                    }`}
+                  >
+                    回収
+                  </button>
+                </>
+              ) : (
+                <span className="text-gray-400 text-lg">□</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
