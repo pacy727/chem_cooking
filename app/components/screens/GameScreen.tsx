@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { UserData, Order, Recipe, FilterCategory } from '../../../lib/types';
-import { RECIPES, CUSTOMERS } from '../../../lib/data/gameData';
+import { RECIPES, CUSTOMERS, INGREDIENTS } from '../../../lib/data/gameData';
 import { 
   calculateReaction, 
   calculateLevelUp, 
@@ -13,10 +13,9 @@ import {
   calculateRecipeCost,
   checkVipCustomer
 } from '../../../lib/utils/gameUtils';
-import ChemiPot from '../game/ChemiPot';
-import OrderDisplay from '../game/OrderDisplay';
 import SkillModal from '../modals/SkillModal';
 import IngredientModal from '../modals/IngredientModal';
+import Pantry from '../game/Pantry';
 import { Star, Home, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -43,7 +42,7 @@ export default function GameScreen({
   const [showResults, setShowResults] = useState(false);
   const [lastResult, setLastResult] = useState<any>(null);
   const [showRecipeHint, setShowRecipeHint] = useState(false);
-  const [filterCategory, setFilterCategory] = useState<FilterCategory>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'gas' | 'solution' | 'solid' | 'metal'>('all');
   
   // モーダル状態
   const [showSkillModal, setShowSkillModal] = useState(false);
@@ -72,6 +71,9 @@ export default function GameScreen({
     const recipe = recipes[Math.floor(Math.random() * recipes.length)];
     const customer = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
     const targetMol = parseFloat((Math.random() * 3 + 1).toFixed(1));
+    
+    // 水溶液の濃度をランダム生成
+    setCurrentConcentrations(generateConcentrations());
     
     // VIP客来店判定（口コミ評価スキル）
     let isLegend = false;
@@ -111,7 +113,79 @@ export default function GameScreen({
     }
   };
 
-  const addToPot = (formula: string, amount: number, cost: number) => {
+  // 原子量・分子量の定数（g/mol）
+  const MOLAR_MASSES: Record<string, number> = {
+    // 気体
+    'O2': 32,    // 酸素
+    'H2': 2,     // 水素
+    'CO2': 44,   // 二酸化炭素
+    'N2': 28,    // 窒素
+    'Cl2': 71,   // 塩素
+    'NH3': 17,   // アンモニア
+    
+    // 水溶液（溶質の分子量）
+    'HCl': 36,      // 塩酸
+    'H2SO4': 98,    // 硫酸
+    'HNO3': 63,     // 硝酸
+    'NaOH': 40,     // 水酸化ナトリウム
+    'H2O': 18,      // 水
+    
+    // 固体
+    'NaCl': 58,     // 塩化ナトリウム
+    'CaCO3': 100,   // 炭酸カルシウム
+    'C': 12,        // 炭素
+    'S': 32,        // 硫黄
+    'I2': 254,      // ヨウ素
+    
+    // 金属
+    'Fe': 56,       // 鉄
+    'Cu': 64,       // 銅
+    'Zn': 65,       // 亜鉛
+    'Al': 27,       // アルミニウム
+    'Mg': 24,       // マグネシウム
+    'Na': 23        // ナトリウム
+  };
+
+  // 水溶液の濃度選択肢（mol/L）
+  const SOLUTION_CONCENTRATIONS = [0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 2.5, 5.0];
+
+  // 現在の注文の水溶液濃度を管理
+  const [currentConcentrations, setCurrentConcentrations] = useState<Record<string, number>>({});
+
+  // 注文生成時に水溶液濃度をランダム設定
+  const generateConcentrations = () => {
+    const concentrations: Record<string, number> = {};
+    const solutionFormulas = ['HCl', 'H2SO4', 'HNO3', 'NaOH', 'H2O'];
+    
+    solutionFormulas.forEach(formula => {
+      const randomIndex = Math.floor(Math.random() * SOLUTION_CONCENTRATIONS.length);
+      concentrations[formula] = SOLUTION_CONCENTRATIONS[randomIndex];
+    });
+    
+    return concentrations;
+  };
+
+  // 単位からmolへの変換関数（修正版）
+  const convertToMol = (amount: number, unit: string, formula: string): number => {
+    switch (unit) {
+      case 'L':   // 気体：標準状態で22.4L = 1mol
+        return amount / 22.4;
+      case 'mL':  // 水溶液：濃度 × 体積(L) = mol
+        const concentration = currentConcentrations[formula] || 1.0;
+        const volumeInL = amount / 1000; // mL → L
+        return concentration * volumeInL;
+      case 'g':   // 固体・金属：質量(g) ÷ 分子量(g/mol) = mol
+        const molarMass = MOLAR_MASSES[formula] || 100;
+        return amount / molarMass;
+      default:
+        return amount;
+    }
+  };
+
+  const addToPot = (formula: string, amount: number, unit: string) => {
+    const molAmount = convertToMol(amount, unit, formula);
+    const cost = molAmount * 100; // 100円/mol
+    
     if (money < cost) {
       toast.error('お金が足りません！');
       return;
@@ -120,10 +194,21 @@ export default function GameScreen({
     updateMoney(-cost);
     setPotContents(prev => ({
       ...prev,
-      [formula]: (prev[formula] || 0) + amount
+      [formula]: (prev[formula] || 0) + molAmount
     }));
     
     setShowIngredientModal(false);
+    
+    // 詳細情報付きトースト
+    if (unit === 'mL') {
+      const concentration = currentConcentrations[formula] || 1.0;
+      toast.success(`${formula} ${molAmount.toFixed(3)} mol を追加しました！\n(${concentration}M × ${amount}mL)`);
+    } else if (unit === 'g') {
+      const molarMass = MOLAR_MASSES[formula] || 100;
+      toast.success(`${formula} ${molAmount.toFixed(3)} mol を追加しました！\n(${amount}g ÷ ${molarMass}g/mol)`);
+    } else {
+      toast.success(`${formula} ${molAmount.toFixed(3)} mol を追加しました！`);
+    }
   };
 
   const clearPot = () => {
@@ -302,10 +387,10 @@ export default function GameScreen({
 
   return (
     <>
-      <div className="h-screen w-full bg-white shadow-xl flex flex-col overflow-hidden">
-        {/* ヘッダー（76px: 60px高さ + 8px上下margin） */}
-        <div className="flex justify-between items-center px-4 py-2 bg-yellow-100 rounded-xl flex-shrink-0 mx-4 mt-2 mb-2" style={{ height: '60px' }}>
-          <div className="flex items-center gap-4">
+      <div className="fixed inset-0 bg-white flex flex-col overflow-hidden">
+        {/* ヘッダー（固定高さ48px） */}
+        <div className="flex justify-between items-center px-3 py-2 bg-yellow-100 flex-shrink-0 border-b border-yellow-200" style={{ height: '48px' }}>
+          <div className="flex items-center gap-2">
             {/* タイトル */}
             <h1 className="font-lobster text-lg font-bold text-yellow-600" style={{ fontFamily: 'Lobster, cursive' }}>
               La Cucina Chimica
@@ -313,7 +398,7 @@ export default function GameScreen({
             
             {/* ユーザー情報 */}
             {userData && (
-              <div className="text-sm text-gray-700 hidden md:block">
+              <div className="text-sm text-gray-700 hidden lg:block">
                 <span className="font-semibold">{userData.chefName}</span> ({userData.storeName}) | 
                 Lv.{userData.level} | 
                 EXP: {userData.exp}/{getExpForLevel(userData.level)}
@@ -321,18 +406,18 @@ export default function GameScreen({
             )}
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             {/* 資本金 */}
-            <div className="text-lg font-bold text-yellow-600">
+            <div className="text-base font-bold text-yellow-600">
               ¥{money.toLocaleString()}
             </div>
             
             {/* ボタン群 */}
-            <div className="flex gap-2">
+            <div className="flex gap-1">
               {userData && (
                 <button 
                   onClick={() => setShowSkillModal(true)}
-                  className="bg-blue-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-blue-600 transition flex items-center"
+                  className="bg-blue-500 text-white font-semibold py-1 px-2 rounded hover:bg-blue-600 transition flex items-center"
                 >
                   <Star className="w-4 h-4" />
                 </button>
@@ -340,13 +425,13 @@ export default function GameScreen({
               
               <button 
                 onClick={onReturnHome}
-                className="bg-gray-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-gray-600 transition flex items-center"
+                className="bg-gray-500 text-white font-semibold py-1 px-2 rounded hover:bg-gray-600 transition flex items-center"
               >
                 <Home className="w-4 h-4" />
               </button>
               <button 
                 onClick={onLogout}
-                className="bg-red-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-red-600 transition flex items-center"
+                className="bg-red-500 text-white font-semibold py-1 px-2 rounded hover:bg-red-600 transition flex items-center"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -354,178 +439,176 @@ export default function GameScreen({
           </div>
         </div>
 
-        {/* メインエリア（100vh - ヘッダー76px - 全体padding32px = calc(100vh - 108px)） */}
-        <div className="px-4 pb-4" style={{ height: 'calc(100vh - 108px)' }}>
-          <div className="grid grid-cols-2 gap-4 h-full">
+        {/* メインエリア（calc(100vh - 48px)） */}
+        <div className="p-3 flex-1 overflow-hidden" style={{ height: 'calc(100vh - 48px)' }}>
+          <div className="grid grid-cols-2 gap-3 h-full">
             {/* 左カラム：パントリー + ケミ鍋 */}
-            <div className="flex flex-col gap-3 h-full">
+            <div className="flex flex-col gap-3 h-full overflow-hidden">
               {/* パントリー */}
-              <div className="bg-white rounded-xl border-2 border-gray-200 p-3 overflow-hidden" style={{ height: '65%' }}>
-                <h2 className="text-sm font-semibold mb-2 text-gray-800">🥬 パントリー</h2>
-                
-                {/* フィルターボタン */}
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {[
-                    { label: '全て', value: 'all' as FilterCategory },
-                    { label: '金属', value: 'metal' as FilterCategory },
-                    { label: '酸', value: 'acid' as FilterCategory },
-                    { label: '塩基', value: 'base' as FilterCategory },
-                    { label: '塩', value: 'salt' as FilterCategory },
-                    { label: '気体', value: 'gas' as FilterCategory },
-                    { label: '有機', value: 'organic' as FilterCategory },
-                    { label: 'その他', value: 'other' as FilterCategory }
-                  ].map(({ label, value }) => (
-                    <button
-                      key={value}
-                      onClick={() => setFilterCategory(value)}
-                      className={`px-2 py-0.5 rounded-full font-semibold text-xs transition-all ${
-                        filterCategory === value
-                          ? 'bg-yellow-500 text-white transform scale-105 shadow-md'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                
-                {/* 材料リスト */}
-                <div className="bg-gray-50 p-2 rounded-xl overflow-y-auto" style={{ height: 'calc(100% - 70px)' }}>
-                  {(() => {
-                    // インライン材料データ
-                    const INGREDIENTS: Record<string, any> = {
-                      'Fe': { name: 'Fe (鉄)', price: 100, category: 'metal' },
-                      'Cu': { name: 'Cu (銅)', price: 120, category: 'metal' },
-                      'Zn': { name: 'Zn (亜鉛)', price: 110, category: 'metal' },
-                      'HCl': { name: 'HCl (塩酸)', price: 50, category: 'acid' },
-                      'H2SO4': { name: 'H₂SO₄ (硫酸)', price: 60, category: 'acid' },
-                      'NaOH': { name: 'NaOH (水酸化ナトリウム)', price: 45, category: 'base' },
-                      'NH3': { name: 'NH₃ (アンモニア)', price: 55, category: 'base' },
-                      'NaCl': { name: 'NaCl (塩化ナトリウム)', price: 20, category: 'salt' },
-                      'O2': { name: 'O₂ (酸素)', price: 25, category: 'gas' },
-                      'H2': { name: 'H₂ (水素)', price: 30, category: 'gas' },
-                      'H2O': { name: 'H₂O (水)', price: 5, category: 'other' }
-                    };
-                    
-                    const filteredIngredients = Object.entries(INGREDIENTS).filter(([_, ingredient]) => 
-                      filterCategory === 'all' || ingredient.category === filterCategory
-                    );
-                    
-                    return (
-                      <div className="space-y-1">
-                        {filteredIngredients.map(([formula, ingredient]) => (
-                          <div
-                            key={formula}
-                            onClick={() => {
-                              setSelectedIngredient({ formula, ingredient });
-                              setShowIngredientModal(true);
-                            }}
-                            className="bg-white p-1.5 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 transition"
-                          >
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <p className="font-semibold text-gray-800 text-xs">{ingredient.name}</p>
-                                <p className="text-xs text-gray-600">¥{ingredient.price}/mol</p>
-                              </div>
-                              <button className="bg-blue-500 text-white px-2 py-0.5 rounded text-xs hover:bg-blue-600 transition">
-                                追加
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
+              <div style={{ height: '65%' }}>
+                <Pantry 
+                  filterCategory={filterCategory}
+                  onFilterChange={setFilterCategory}
+                  onIngredientClick={(formula, ingredient) => {
+                    setSelectedIngredient({ formula, ingredient });
+                    setShowIngredientModal(true);
+                  }}
+                />
               </div>
               
               {/* ケミ鍋エリア */}
-              <div className="bg-white rounded-xl border-2 border-gray-200 p-3 overflow-hidden" style={{ height: 'calc(35% - 12px)' }}>
-                <div style={{ height: 'calc(100% - 60px)' }}>
-                  <ChemiPot 
-                    contents={potContents}
-                    onClear={clearPot}
-                    userData={userData}
-                    onSalvage={(formula) => {
-                      setPotContents(prev => {
-                        const newContents = { ...prev };
-                        delete newContents[formula];
-                        return newContents;
-                      });
-                    }}
-                  />
+              <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: 'calc(35% - 12px)' }}>
+                <div className="mb-2">
+                  <h3 className="text-sm font-semibold text-orange-800 mb-2">🍲 ケミ鍋</h3>
+                  <div className="bg-orange-200 rounded p-2 border border-orange-400 overflow-y-auto" style={{ height: '70px' }}>
+                    {Object.keys(potContents).length === 0 ? (
+                      <p className="text-gray-600 italic text-sm">ここに材料を入れてください...</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {Object.entries(potContents).map(([formula, amount]) => {
+                          const ingredient = INGREDIENTS[formula];
+                          return (
+                            <div 
+                              key={formula}
+                              className="flex justify-between items-center bg-orange-300 p-1.5 rounded text-sm"
+                            >
+                              <span className="font-semibold">{ingredient?.name || formula}</span>
+                              <div className="flex items-center gap-2">
+                                <span>{amount.toFixed(2)} mol</span>
+                                <button 
+                                  onClick={() => {
+                                    setPotContents(prev => {
+                                      const newContents = { ...prev };
+                                      delete newContents[formula];
+                                      return newContents;
+                                    });
+                                  }}
+                                  className="text-sm text-red-500 font-semibold px-2 py-0.5 bg-red-100 rounded hover:bg-red-500 hover:text-white transition"
+                                >
+                                  回収
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <button 
+                    onClick={clearPot}
+                    className="mt-2 bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition"
+                  >
+                    鍋を空にする
+                  </button>
                 </div>
                 
                 {/* 反応ボタン */}
-                <div className="mt-1 text-center">
+                <div className="text-center">
                   <button 
                     onClick={performReaction}
                     disabled={isProcessing}
-                    className="bg-red-600 text-white font-bold text-xs py-1 px-3 rounded-lg shadow-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="bg-red-600 text-white font-bold text-sm py-2 px-4 rounded shadow hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isProcessing ? '反応中...' : 'REACTION !!'}
                   </button>
                 </div>
+              </div>
+            </div>
 
-                {/* レシピヒント */}
-                <div className="mt-1">
+            {/* 右カラム：注文 + レシピ + お皿統合エリア */}
+            <div className="flex flex-col gap-3 h-full overflow-hidden">
+              {/* 注文表示 */}
+              <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: '25%' }}>
+                {currentOrder && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-blue-800 mb-2">👤 お客様のご注文</h3>
+                    <p className="text-base font-bold text-blue-900 mb-2">{currentOrder.customer.order}</p>
+                    <p className="text-sm text-blue-700">
+                      {currentOrder.recipe.product.name} を {currentOrder.targetMol.toFixed(1)} mol
+                    </p>
+                    
+                    {/* レジェンドオーダー表示 */}
+                    {currentOrder.isLegend && (
+                      <div className="mt-2 p-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded text-center">
+                        <span className="text-sm font-bold">✨ レジェンドオーダー ✨</span>
+                        <div className="text-sm">ボーナス5倍！</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* レシピエリア */}
+              <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: '25%' }}>
+                <h3 className="text-sm font-semibold text-green-800 mb-2">📖 レシピ情報</h3>
+                <div className="h-full">
                   {showRecipeHint && currentRecipe ? (
-                    <div className="p-1 bg-green-100 rounded border border-green-300">
-                      <h4 className="text-xs font-semibold text-green-800">📖 レシピ</h4>
-                      <div className="text-green-700 text-xs">
-                        {Object.entries(currentRecipe.reactants).map(([formula, amount]) => (
-                          <span key={formula}>{formula}:{amount} </span>
-                        ))}
+                    <div className="p-3 bg-green-100 rounded-lg border border-green-300 h-full overflow-y-auto">
+                      <h4 className="text-base font-bold text-green-800 mb-3">{currentRecipe.name} の作り方</h4>
+                      
+                      <div className="mb-3">
+                        <h5 className="text-sm font-semibold text-green-700 mb-2">必要な材料:</h5>
+                        <div className="space-y-1">
+                          {Object.entries(currentRecipe.reactants).map(([formula, amount]) => (
+                            <div key={formula} className="flex justify-between text-sm">
+                              <span className="text-green-700">{formula}</span>
+                              <span className="font-semibold text-green-800">{amount} mol</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mb-3">
+                        <h5 className="text-sm font-semibold text-green-700 mb-2">生成物:</h5>
+                        <div className="text-sm text-green-700">
+                          <span className="font-semibold">{currentRecipe.product.name}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h5 className="text-sm font-semibold text-green-700 mb-2">説明:</h5>
+                        <p className="text-sm text-green-600">{currentRecipe.description}</p>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center">
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <p className="text-gray-500 italic text-sm mb-3">レシピを購入して詳細を確認しましょう</p>
                       <button 
                         onClick={buyRecipe}
-                        className="bg-yellow-500 text-white font-semibold py-0.5 px-2 rounded text-xs hover:bg-yellow-600 transition"
+                        className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-yellow-600 transition shadow-md"
                       >
-                        💡 レシピ ({recipeCost}円)
+                        💡 レシピを購入 ({recipeCost}円)
                       </button>
                     </div>
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* 右カラム：注文 + お皿統合エリア */}
-            <div className="flex flex-col gap-3 h-full">
-              {/* 注文表示 */}
-              <div className="bg-white rounded-xl border-2 border-gray-200 p-3 overflow-hidden" style={{ height: '35%' }}>
-                {currentOrder && (
-                  <OrderDisplay order={currentOrder} />
-                )}
-              </div>
               
               {/* お皿統合エリア */}
-              <div className="bg-gray-100 rounded-xl border-2 border-gray-300 p-3 overflow-hidden" style={{ height: 'calc(65% - 12px)' }}>
+              <div className="bg-gray-100 rounded-lg border border-gray-300 p-3 overflow-hidden" style={{ height: 'calc(50% - 24px)' }}>
                 <h3 className="text-sm font-semibold text-gray-800 mb-2">🍽️ お皿</h3>
                 
                 <div className="grid grid-cols-2 gap-2 overflow-hidden" style={{ height: 'calc(100% - 30px)' }}>
                   {/* 左側：生成物質・未反応物質 */}
-                  <div className="bg-white rounded-lg p-2 border border-gray-200 flex flex-col overflow-hidden">
-                    <h4 className="font-semibold text-gray-700 mb-1 text-xs">生成物・未反応物</h4>
+                  <div className="bg-white rounded p-2 border border-gray-200 flex flex-col overflow-hidden">
+                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">生成物・未反応物</h4>
                     <div className="flex-1 space-y-1 overflow-y-auto">
                       {plateProducts.length === 0 && plateUnreacted.length === 0 ? (
-                        <p className="text-gray-500 italic text-xs">まだ何も生成されていません...</p>
+                        <p className="text-gray-500 italic text-sm">まだ何も生成されていません...</p>
                       ) : (
                         <>
                           {plateProducts.map((product, index) => (
-                            <div key={`product-${index}`} className="p-1 bg-green-50 rounded border border-green-200">
-                              <span className="font-semibold text-green-700 text-xs">{product.formula}</span>
-                              <span className="text-green-600 ml-1 text-xs">{product.amount.toFixed(2)} mol</span>
-                              <div className="text-xs text-gray-600 truncate">{product.name}</div>
+                            <div key={`product-${index}`} className="p-1.5 bg-green-50 rounded border border-green-200">
+                              <span className="font-semibold text-green-700 text-sm">{product.formula}</span>
+                              <span className="text-green-600 ml-2 text-sm">{product.amount.toFixed(2)} mol</span>
+                              <div className="text-sm text-gray-600 truncate">{product.name}</div>
                             </div>
                           ))}
                           {plateUnreacted.map((unreacted, index) => (
-                            <div key={`unreacted-${index}`} className="p-1 bg-red-50 rounded border border-red-200">
-                              <span className="font-semibold text-red-700 text-xs">{unreacted.formula}</span>
-                              <span className="text-red-600 ml-1 text-xs">{unreacted.amount.toFixed(2)} mol</span>
-                              <div className="text-xs text-gray-600 truncate">{unreacted.name}</div>
+                            <div key={`unreacted-${index}`} className="p-1.5 bg-red-50 rounded border border-red-200">
+                              <span className="font-semibold text-red-700 text-sm">{unreacted.formula}</span>
+                              <span className="text-red-600 ml-2 text-sm">{unreacted.amount.toFixed(2)} mol</span>
+                              <div className="text-sm text-gray-600 truncate">{unreacted.name}</div>
                             </div>
                           ))}
                         </>
@@ -534,34 +617,34 @@ export default function GameScreen({
                   </div>
                   
                   {/* 右側：お客様の反応 */}
-                  <div className="bg-purple-50 rounded-lg p-2 border border-purple-200 flex flex-col overflow-hidden">
-                    <h4 className="font-semibold text-purple-700 mb-1 text-xs">💬 お客様の反応</h4>
-                    <div className="flex-1 text-purple-700 overflow-y-auto text-xs">
+                  <div className="bg-purple-50 rounded p-2 border border-purple-200 flex flex-col overflow-hidden">
+                    <h4 className="font-semibold text-purple-700 mb-2 text-sm">💬 お客様の反応</h4>
+                    <div className="flex-1 text-purple-700 overflow-y-auto text-sm">
                       {customerFeedbackMsg ? (
                         <div className="whitespace-pre-line">
                           {customerFeedbackMsg.split('\n').map((line, index) => (
-                            <div key={index} className={index === 0 ? 'text-sm font-bold' : 'text-xs'}>
+                            <div key={index} className={index === 0 ? 'text-sm font-bold' : 'text-sm'}>
                               {line}
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-gray-500 italic text-xs">お客様の反応を待っています...</p>
+                        <p className="text-gray-500 italic text-sm">お客様の反応を待っています...</p>
                       )}
                     </div>
                     
                     {/* 結果ボタン */}
                     {showResults && (
-                      <div className="mt-1 space-y-1 flex-shrink-0">
+                      <div className="mt-2 space-y-1 flex-shrink-0">
                         <button 
                           onClick={nextOrder}
-                          className="w-full bg-green-600 text-white font-bold py-1 px-1 rounded hover:bg-green-700 transition text-xs"
+                          className="w-full bg-green-600 text-white font-bold py-1.5 rounded hover:bg-green-700 transition text-sm"
                         >
                           次のお客様 →
                         </button>
                         <button 
                           onClick={retry}
-                          className="w-full bg-blue-600 text-white font-bold py-1 px-1 rounded hover:bg-blue-700 transition text-xs"
+                          className="w-full bg-blue-600 text-white font-bold py-1.5 rounded hover:bg-blue-700 transition text-sm"
                         >
                           リトライ
                         </button>
@@ -592,7 +675,9 @@ export default function GameScreen({
           formula={selectedIngredient.formula}
           ingredient={selectedIngredient.ingredient}
           userData={userData}
-          onAddToPot={addToPot}
+          onAddToPot={(formula, amount, unit) => addToPot(formula, amount, unit)}
+          concentration={currentConcentrations[selectedIngredient.formula]}
+          molarMass={MOLAR_MASSES[selectedIngredient.formula]}
         />
       )}
     </>
