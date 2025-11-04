@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./app/*"],  // ← ここを./app/*に変更
+      "@/lib/*": ["./lib/*"],
+      "@/components/*": ["./app/components/*"]
     }
   },
   "include": [
@@ -28,7 +30,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    "app/**/*",  // ← appディレクトリを明示的に含める
+    "lib/**/*"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "src"]  // ← srcを除外
 }
