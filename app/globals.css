@@ -116,3 +116,19 @@ input[type=number] {
   margin: 10px !important;
   border-radius: 8px !important;
 }
+
+/* pot-bubble animation for ChemiPot component */
+@keyframes pot-bubble {
+  0%, 100% { 
+      transform: translateY(0) scale(1); 
+      opacity: 0.8; 
+  }
+  50% { 
+      transform: translateY(-15px) scale(1.1); 
+      opacity: 1; 
+  }
+}
+
+.pot-bubble {
+  animation: pot-bubble 1s ease-in-out infinite;
+}

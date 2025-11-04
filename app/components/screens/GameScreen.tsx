@@ -16,6 +16,7 @@ import {
 import SkillModal from '../modals/SkillModal';
 import IngredientModal from '../modals/IngredientModal';
 import Pantry from '../game/Pantry';
+import ChemiPot from '../game/ChemiPot';
 import { Star, Home, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -458,52 +459,21 @@ export default function GameScreen({
               
               {/* ケミ鍋エリア */}
               <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: 'calc(35% - 12px)' }}>
-                <div className="mb-2">
-                  <h3 className="text-sm font-semibold text-orange-800 mb-2">🍲 ケミ鍋</h3>
-                  <div className="bg-orange-200 rounded p-2 border border-orange-400 overflow-y-auto" style={{ height: '70px' }}>
-                    {Object.keys(potContents).length === 0 ? (
-                      <p className="text-gray-600 italic text-sm">ここに材料を入れてください...</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {Object.entries(potContents).map(([formula, amount]) => {
-                          const ingredient = INGREDIENTS[formula];
-                          return (
-                            <div 
-                              key={formula}
-                              className="flex justify-between items-center bg-orange-300 p-1.5 rounded text-sm"
-                            >
-                              <span className="font-semibold">{ingredient?.name || formula}</span>
-                              <div className="flex items-center gap-2">
-                                <span>{amount.toFixed(2)} mol</span>
-                                <button 
-                                  onClick={() => {
-                                    setPotContents(prev => {
-                                      const newContents = { ...prev };
-                                      delete newContents[formula];
-                                      return newContents;
-                                    });
-                                  }}
-                                  className="text-sm text-red-500 font-semibold px-2 py-0.5 bg-red-100 rounded hover:bg-red-500 hover:text-white transition"
-                                >
-                                  回収
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <button 
-                    onClick={clearPot}
-                    className="mt-2 bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition"
-                  >
-                    鍋を空にする
-                  </button>
-                </div>
+                <ChemiPot 
+                  contents={potContents}
+                  onSalvage={(formula) => {
+                    setPotContents(prev => {
+                      const newContents = { ...prev };
+                      delete newContents[formula];
+                      return newContents;
+                    });
+                  }}
+                  userData={userData}
+                  isProcessing={isProcessing}
+                />
                 
                 {/* 反応ボタン */}
-                <div className="text-center">
+                <div className="text-center mt-3">
                   <button 
                     onClick={performReaction}
                     disabled={isProcessing}
