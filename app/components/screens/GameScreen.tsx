@@ -704,65 +704,56 @@ export default function GameScreen({
 
   return (
     <>
-      <div className="fixed inset-0 bg-white flex flex-col overflow-hidden">
-        {/* ヘッダー（固定高さ48px） */}
-        <div className="flex justify-between items-center px-3 py-2 bg-yellow-100 flex-shrink-0 border-b border-yellow-200" style={{ height: '48px' }}>
-          <div className="flex items-center gap-2">
-            {/* タイトル */}
-            <h1 className="font-lobster text-lg font-bold text-yellow-600" style={{ fontFamily: 'Lobster, cursive' }}>
-              La Cucina Chimica
-            </h1>
-            
-            {/* ユーザー情報 */}
-            {userData && (
-              <div className="text-sm text-gray-700 hidden lg:block">
-                <span className="font-semibold">{userData.chefName}</span> ({userData.storeName}) | 
-                Lv.{userData.level} | 
-                EXP: {userData.exp}/{getExpForLevel(userData.level)}
-              </div>
-            )}
-          </div>
+      {/* 全体コンテナ - 90%幅、画面内確実収容 */}
+      <div className="w-[90%] mx-auto max-h-screen h-screen flex flex-col overflow-hidden">
+        {/* ヘッダー：タイトルと所持金（コンパクト版） */}
+        <header className="flex justify-between items-center p-3 bg-white rounded-xl shadow-md flex-shrink-0">
+          <button 
+            onClick={onReturnHome}
+            className="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition"
+          >
+            ホームへ戻る
+          </button>
+          <h1 className="text-2xl font-bold text-yellow-600 hidden md:block">
+            化学反応キッチン
+          </h1>
           
-          <div className="flex items-center gap-2">
-            {/* 資本金 */}
-            <div className="text-base font-bold text-yellow-600">
+          <div className="flex items-center gap-3">
+            <div className="text-2xl font-bold text-gray-700 bg-gray-100 px-4 py-2 rounded-lg">
               ¥{money.toLocaleString()}
             </div>
             
-            {/* ボタン群 */}
-            <div className="flex gap-1">
+            {/* その他のボタン群 */}
+            <div className="flex gap-2">
               {userData && (
                 <button 
                   onClick={() => setShowSkillModal(true)}
-                  className="bg-blue-500 text-white font-semibold py-1 px-2 rounded hover:bg-blue-600 transition flex items-center"
+                  className="bg-blue-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-blue-600 transition flex items-center"
                 >
-                  <Star className="w-4 h-4" />
+                  <Star className="w-5 h-5" />
                 </button>
               )}
               
               <button 
-                onClick={onReturnHome}
-                className="bg-gray-500 text-white font-semibold py-1 px-2 rounded hover:bg-gray-600 transition flex items-center"
-              >
-                <Home className="w-4 h-4" />
-              </button>
-              <button 
                 onClick={onLogout}
-                className="bg-red-500 text-white font-semibold py-1 px-2 rounded hover:bg-red-600 transition flex items-center"
+                className="bg-gray-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-gray-600 transition flex items-center"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           </div>
-        </div>
+        </header>
 
-        {/* メインエリア（calc(100vh - 48px)） */}
-        <div className="p-3 flex-1 overflow-hidden" style={{ height: 'calc(100vh - 48px)' }}>
-          <div className="grid grid-cols-2 gap-3 h-full">
-            {/* 左カラム：パントリー + ケミ鍋 */}
-            <div className="flex flex-col gap-3 h-full overflow-hidden">
-              {/* パントリー */}
-              <div style={{ height: '65%' }}>
+        <main className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0 mt-2">
+          {/* 左側：パントリーとケミ鍋 */}
+          <div>
+            {/* 1. パントリーエリア */}
+            <section className="mb-3">
+              <div className="bg-white p-3 rounded-xl shadow-md relative">
+                {/* 価格表示（右上角） */}
+                <div className="absolute top-2 right-2 text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                  100円/mol
+                </div>
                 <Pantry 
                   filterCategory={filterCategory}
                   onFilterChange={setFilterCategory}
@@ -772,219 +763,222 @@ export default function GameScreen({
                   }}
                 />
               </div>
-              
-              {/* ケミ鍋エリア */}
-              <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: 'calc(35% - 12px)' }}>
-                <ChemiPot 
-                  contents={potContents}
-                  onSalvage={(formula) => {
-                    setPotContents(prev => {
-                      const newContents = { ...prev };
-                      delete newContents[formula];
-                      return newContents;
-                    });
-                  }}
-                  userData={userData}
-                  isProcessing={isProcessing}
-                />
-                
-                {/* 反応ボタン */}
-                <div className="text-center mt-3">
-                  <button 
-                    onClick={performReaction}
-                    disabled={isProcessing || reactionCompleted}
-                    className={`font-bold text-sm py-3 px-8 rounded shadow transition w-full ${
-                      isProcessing || reactionCompleted
-                        ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                        : 'bg-red-600 text-white hover:bg-red-700'
-                    }`}
-                  >
-                    {isProcessing ? '反応中...' : reactionCompleted ? '反応完了' : 'REACTION !!'}
-                  </button>
+            </section>
+            
+            {/* 2. ケミ鍋エリア */}
+            <section className="mt-12">
+              <div className="flex items-center space-x-4">
+                {/* ケミ鍋ビジュアル */}
+                <div className="w-28 h-28 bg-gray-700 rounded-full flex items-center justify-center relative shadow-inner">
+                  <span className="text-5xl">🍲</span>
+                  <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">
+                    {Object.keys(potContents).length}
+                  </div>
                 </div>
-              </div>
-            </div>
-
-            {/* 右カラム：注文 + レシピ + お皿統合エリア */}
-            <div className="flex flex-col gap-3 h-full overflow-hidden">
-              {/* 注文表示 */}
-              <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: '25%' }}>
-                {currentOrder && (
-                  <div className="h-full flex items-center">
-                    {/* 2カラムレイアウト */}
-                    <div className="flex gap-3 w-full">
-                      {/* 左側：客のアイコン（狭い） */}
-                      <div className="w-12 flex-shrink-0 flex items-center justify-center">
-                        <span className="text-3xl">{CUSTOMER_TYPES[currentOrder.customerType]?.emoji || '👨‍🔬'}</span>
-                      </div>
-                      
-                      {/* 右側：3行構成 */}
-                      <div className="flex-1 flex flex-col justify-center space-y-1">
-                        {/* 1行目：コメント */}
-                        <p className="text-sm text-gray-700 leading-tight">{currentOrder.customerComment}</p>
-                        
-                        {/* 2行目：オーダー（太字） */}
-                        <p className="text-base font-bold text-blue-900 leading-tight">{currentOrder.orderText}</p>
-                        
-                        {/* 3行目：客レア度 */}
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                            currentOrder.customerType === 'normal' ? 'bg-gray-100 text-gray-700' :
-                            currentOrder.customerType === 'rare' ? 'bg-blue-100 text-blue-700' :
-                            currentOrder.customerType === 'super rare' ? 'bg-purple-100 text-purple-700' :
-                            'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            [ {CUSTOMER_TYPES[currentOrder.customerType]?.displayName || 'Normal客'} ]
-                          </span>
-                          {currentOrder.bonusMultiplier && currentOrder.bonusMultiplier > 1 && (
-                            <span className="text-xs text-green-600 font-semibold">
-                              ボーナス×{currentOrder.bonusMultiplier}
-                            </span>
+                
+                {/* 投入材料表示エリア（左右2つのコンテナ + 中央「+」） */}
+                <div className="flex-1 h-28 flex items-center space-x-2">
+                  {/* 材料リスト配列の準備 */}
+                  {(() => {
+                    const materials = Object.entries(potContents);
+                    const leftMaterial = materials[0] || null;
+                    const rightMaterial = materials[1] || null;
+                    
+                    return (
+                      <>
+                        {/* 左側材料コンテナ */}
+                        <div className="flex-1 h-full bg-white rounded-xl shadow-md p-3 flex flex-col items-center justify-center">
+                          {leftMaterial ? (
+                            <>
+                              <div className="text-lg font-bold text-gray-800">{leftMaterial[0]}</div>
+                              <div className="text-sm text-gray-600">{formatNumber(leftMaterial[1])} mol</div>
+                              <button 
+                                onClick={() => {
+                                  setPotContents(prev => {
+                                    const newContents = { ...prev };
+                                    delete newContents[leftMaterial[0]];
+                                    return newContents;
+                                  });
+                                }}
+                                className="mt-1 text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
+                              >
+                                回収
+                              </button>
+                            </>
+                          ) : (
+                            <div className="text-gray-400 text-center text-sm">材料1</div>
                           )}
                         </div>
+
+                        {/* 中央の「+」マーク */}
+                        <div className="flex items-center justify-center w-8 h-8 bg-yellow-500 text-white rounded-full font-bold text-lg shadow-md">
+                          +
+                        </div>
+
+                        {/* 右側材料コンテナ */}
+                        <div className="flex-1 h-full bg-white rounded-xl shadow-md p-3 flex flex-col items-center justify-center">
+                          {rightMaterial ? (
+                            <>
+                              <div className="text-lg font-bold text-gray-800">{rightMaterial[0]}</div>
+                              <div className="text-sm text-gray-600">{formatNumber(rightMaterial[1])} mol</div>
+                              <button 
+                                onClick={() => {
+                                  setPotContents(prev => {
+                                    const newContents = { ...prev };
+                                    delete newContents[rightMaterial[0]];
+                                    return newContents;
+                                  });
+                                }}
+                                className="mt-1 text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
+                              >
+                                回収
+                              </button>
+                            </>
+                          ) : (
+                            <div className="text-gray-400 text-center text-sm">材料2</div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+              {/* 反応ボタン */}
+              <button 
+                onClick={performReaction}
+                disabled={isProcessing || reactionCompleted}
+                className={`mt-4 w-full bg-red-500 text-white font-bold text-xl py-3 rounded-lg shadow-lg hover:bg-red-600 transition transform hover:scale-105 active:scale-95 ${
+                  isProcessing || reactionCompleted
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : ''
+                }`}
+              >
+                {isProcessing ? '反応中...' : reactionCompleted ? '反応完了' : 'REACTION !!'}
+              </button>
+            </section>
+          </div>
+
+          {/* 右カラム：注文 + お皿 */}
+          <div className="flex flex-col gap-4 h-full min-h-0">
+            {/* 注文エリア */}
+            <section className="mb-3">
+              <div className="bg-white p-3 rounded-xl shadow-md h-64">
+                {/* 注文情報エリア（上半分・固定高さ） */}
+                <div className="h-32 flex items-center">
+                  {currentOrder && (
+                    <div className="flex items-center space-x-4 w-full">
+                      <span className="text-6xl">{CUSTOMER_TYPES[currentOrder.customerType]?.emoji || '👨‍🔬'}</span>
+                      <div>
+                        <p className="text-base font-semibold text-gray-800">{currentOrder.customerComment}</p>
+                        <p className="text-xl font-bold text-blue-600">{currentOrder.orderText}</p>
+                        <p className="text-sm font-bold">[{CUSTOMER_TYPES[currentOrder.customerType]?.displayName || 'Normal客'}]</p>
                       </div>
                     </div>
-                    
-                    {/* 材料指定がある場合（下部に表示） */}
-                    {currentOrder.specialInstruction && (
-                      <div className="absolute bottom-1 left-3 right-3">
-                        <p className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
-                          材料指定: {currentOrder.specialInstruction}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* レシピエリア */}
-              <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: '25%' }}>
-                <h3 className="text-sm font-semibold text-green-800 mb-2">📖 反応情報</h3>
-                <div className="h-full">
+                  )}
+                </div>
+                
+                {/* レシピ購入セクション（下半分・固定高さ2/3・スクロール対応） */}
+                <div className="h-24 border-t pt-3 flex flex-col">
                   {showRecipeHint && relatedReactions.length > 0 ? (
-                    <div className="h-full overflow-y-auto space-y-2 pb-2">
-                      {relatedReactions.map((reaction, index) => (
-                        <div 
-                          key={reaction.id}
-                          className="text-center p-3 bg-green-50 rounded-lg border border-green-200 shadow-sm"
-                        >
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="space-y-2">
+                        {relatedReactions.map((reaction, index) => (
                           <div 
-                            className="text-lg font-bold text-green-800"
-                            style={{ 
-                              fontFamily: 'Georgia, "Times New Roman", serif',
-                              letterSpacing: '0.3px',
-                              textShadow: '0 1px 1px rgba(0,0,0,0.1)'
-                            }}
+                            key={reaction.id} 
+                            className="text-center text-lg font-mono text-gray-700 bg-gray-100 p-3 rounded"
                           >
                             {reaction.equation}
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <p className="text-gray-500 italic text-sm mb-3">反応情報を購入して化学反応式を確認しましょう</p>
+                    <div className="flex-1 flex items-center justify-center">
                       <button 
                         onClick={buyRecipe}
-                        className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-yellow-600 transition shadow-md"
+                        className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition"
                       >
-                        💡 反応情報を購入 ({recipeCost}円)
+                        レシピを見る ({recipeCost}円)
                       </button>
                     </div>
                   )}
                 </div>
               </div>
-              
-              {/* お皿統合エリア */}
-              <div className="bg-gray-100 rounded-lg border border-gray-300 p-3 overflow-hidden" style={{ height: 'calc(50% - 24px)' }}>
-                <h3 className="text-sm font-semibold text-gray-800 mb-2">🍽️ お皿</h3>
+            </section>
+
+            {/* 4. 給仕エリア（お皿） */}
+            <section>
+              <div className="flex flex-col items-center justify-between bg-gray-100 rounded-xl h-[240px] p-3">
                 
-                <div className="grid grid-cols-2 gap-2 overflow-hidden" style={{ height: 'calc(100% - 30px)' }}>
-                  {/* 左側：生成物質・未反応物質 - お皿のデザイン */}
-                  <div className="relative flex flex-col overflow-hidden">
-                    {/* お皿の背景 */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-32 h-32 bg-white rounded-full shadow-lg border-4 border-gray-200 opacity-80"></div>
-                    </div>
+                {/* 上段: お皿とフィードバック */}
+                <div className="flex flex-row items-center justify-around w-full">
+                  {/* お皿 */}
+                  <div className="bg-white rounded-full w-36 h-36 shadow-inner flex flex-col items-center justify-center text-gray-300 transition-all duration-300 p-2">
+                    <span className="text-4xl">🍽️</span>
                     
-                    {/* コンテンツ */}
-                    <div className="relative z-10 p-2 flex flex-col h-full">
-                      <div className="flex-1 overflow-y-auto">
-                        {/* 生成物セクション */}
-                        {plateProducts.length > 0 && (
-                          <div className="mb-3">
-                            <div className="text-xs font-semibold text-green-700 mb-1">生成物</div>
-                            <div className="space-y-1">
-                              {plateProducts.map((product, index) => (
-                                <div key={`product-${index}`} className="text-center">
-                                  <div className="text-sm font-semibold text-green-700">
-                                    {product.formula} {formatNumber(product.amount)} mol
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* 未反応物セクション */}
-                        {plateUnreacted.length > 0 && (
-                          <div>
-                            <div className="text-xs font-semibold text-red-700 mb-1">残り</div>
-                            <div className="space-y-1">
-                              {plateUnreacted.map((unreacted, index) => (
-                                <div key={`unreacted-${index}`} className="text-center">
-                                  <div className="text-sm font-semibold text-red-700">
-                                    {unreacted.formula} {formatNumber(unreacted.amount)} mol
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                    {/* メインの生成物 */}
+                    {plateProducts.length > 0 && (
+                      <div className="text-center mt-1">
+                        <span className="block text-lg font-bold text-gray-800">
+                          {plateProducts[0].formula}
+                        </span>
+                        <span className="block text-base text-gray-600">
+                          {formatNumber(plateProducts[0].amount)} mol
+                        </span>
                       </div>
-                    </div>
+                    )}
+                    
+                    {/* 未反応物エリア */}
+                    {plateUnreacted.length > 0 && (
+                      <div className="text-center mt-2 px-2">
+                        <span className="block text-xs text-gray-500">（未反応）</span>
+                        <span className="block text-sm font-semibold text-gray-700">
+                          {plateUnreacted[0].formula}
+                        </span>
+                        <span className="block text-sm text-gray-600">
+                          {formatNumber(plateUnreacted[0].amount)} mol
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  
-                  {/* 右側：お客様の反応 - 透明背景 */}
-                  <div className="flex flex-col overflow-hidden p-2">
+
+                  {/* フィードバックエリア */}
+                  <div className="flex flex-col items-center justify-center w-64">
                     {customerFeedbackMsg && (
-                      <>
-                        <h4 className="font-semibold text-purple-700 mb-2 text-sm">💬 お客様の反応</h4>
-                        <div className="flex-1 text-purple-700 overflow-y-auto text-sm">
-                          <div className="whitespace-pre-line">
-                            {customerFeedbackMsg.split('\n').map((line, index) => (
-                              <div key={index} className={index === 0 ? 'text-sm font-bold' : 'text-sm'}>
-                                {line}
-                              </div>
-                            ))}
-                          </div>
+                      <div className="text-center">
+                        <div className="whitespace-pre-line text-purple-700">
+                          {customerFeedbackMsg.split('\n').map((line, index) => (
+                            <div key={index} className={index === 0 ? 'text-lg font-bold mb-2' : 'text-base'}>
+                              {line}
+                            </div>
+                          ))}
                         </div>
-                        
-                        {/* 結果ボタン */}
-                        {showResults && (
-                          <div className="mt-2 space-y-1 flex-shrink-0">
-                            <button 
-                              onClick={nextOrder}
-                              className="w-full bg-green-600 text-white font-bold py-1.5 rounded hover:bg-green-700 transition text-sm"
-                            >
-                              次の注文へ →
-                            </button>
-                            <button 
-                              onClick={() => setShowChefCommentModal(true)}
-                              className="w-full bg-yellow-600 text-white font-bold py-1.5 rounded hover:bg-yellow-700 transition text-sm"
-                            >
-                              👨‍🍳 シェフのコメント
-                            </button>
-                          </div>
-                        )}
-                      </>
+                      </div>
                     )}
                   </div>
                 </div>
+
+                {/* 下段: ボタンエリア */}
+                {showResults && (
+                  <div className="mt-4 w-full flex flex-row justify-center gap-4">
+                    <button 
+                      onClick={nextOrder}
+                      className="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition"
+                    >
+                      次の注文へ
+                    </button>
+                    <button 
+                      onClick={() => setShowChefCommentModal(true)}
+                      className="bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 transition"
+                    >
+                      シェフのコメント
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            </section>
           </div>
-        </div>
+        </main>
       </div>
 
       {/* モーダル */}

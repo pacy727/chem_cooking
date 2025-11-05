@@ -102,53 +102,84 @@ export default function Pantry({ filterCategory, onFilterChange, onIngredientCli
   );
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden h-full">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-sm font-semibold text-gray-800">🥬 パントリー</h2>
-        <span className="text-sm font-semibold text-gray-600">100円/mol</span>
+    <>
+      {/* フィルターボタン（参考HTML準拠） */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        <button
+          onClick={() => onFilterChange('all')}
+          className={`filter-btn px-3 py-1 rounded text-sm font-semibold transition-colors ${
+            filterCategory === 'all'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          全て
+        </button>
+        <button
+          onClick={() => onFilterChange('gas')}
+          className={`filter-btn px-3 py-1 rounded text-sm font-semibold transition-colors ${
+            filterCategory === 'gas'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          気体
+        </button>
+        <button
+          onClick={() => onFilterChange('solution')}
+          className={`filter-btn px-3 py-1 rounded text-sm font-semibold transition-colors ${
+            filterCategory === 'solution'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          水溶液
+        </button>
+        <button
+          onClick={() => onFilterChange('solid')}
+          className={`filter-btn px-3 py-1 rounded text-sm font-semibold transition-colors ${
+            filterCategory === 'solid'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          固体
+        </button>
+        <button
+          onClick={() => onFilterChange('metal')}
+          className={`filter-btn px-3 py-1 rounded text-sm font-semibold transition-colors ${
+            filterCategory === 'metal'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          金属
+        </button>
+        <button
+          onClick={() => onFilterChange('organic')}
+          className={`filter-btn px-3 py-1 rounded text-sm font-semibold transition-colors ${
+            filterCategory === 'organic'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          有機
+        </button>
       </div>
       
-      {/* フィルターボタン */}
-      <div className="mb-2 flex flex-wrap gap-1">
-        {[
-          { label: 'すべて', value: 'all' as const },
-          { label: '気体', value: 'gas' as const },
-          { label: '水溶液', value: 'solution' as const },
-          { label: '固体', value: 'solid' as const },
-          { label: '金属', value: 'metal' as const },
-          { label: '有機', value: 'organic' as const }
-        ].map(({ label, value }) => (
+      {/* 材料カードグリッド（5カラム、正方形角丸） */}
+      <div className="grid grid-cols-5 gap-3 h-56 overflow-y-auto">
+        {filteredIngredients.map(([formula, ingredient]) => (
           <button
-            key={value}
-            onClick={() => onFilterChange(value)}
-            className={`px-2 py-1 rounded-full font-semibold text-sm transition-all ${
-              filterCategory === value
-                ? 'bg-yellow-500 text-white scale-105 shadow-sm'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+            key={formula}
+            onClick={() => onIngredientClick(formula, ingredient)}
+            className="p-3 bg-gray-50 rounded-xl shadow-sm hover:bg-yellow-100 hover:shadow-md transition transform hover:-translate-y-1 flex flex-col items-center justify-center aspect-square"
           >
-            {label}
+            <span className="text-4xl">{ingredient.emoji}</span>
+            <span className="block text-sm font-semibold mt-1">{ingredient.name}</span>
           </button>
         ))}
       </div>
-      
-      {/* 材料カードグリッド */}
-      <div className="bg-gray-50 p-2 rounded-lg overflow-y-auto" style={{ height: 'calc(100% - 70px)' }}>
-        <div className="grid grid-cols-4 gap-2">
-          {filteredIngredients.map(([formula, ingredient]) => (
-            <div
-              key={formula}
-              onClick={() => onIngredientClick(formula, ingredient)}
-              className="bg-white aspect-square rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 hover:shadow-md transition-all flex flex-col items-center justify-center p-2"
-            >
-              <div className="text-2xl mb-1">{ingredient.emoji}</div>
-              <div className="text-xs font-semibold text-gray-800 text-center leading-tight">
-                {ingredient.name}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
