@@ -6,6 +6,11 @@ import { INGREDIENTS } from '../../../lib/data/gameData';
 import { attemptSalvage } from '../../../lib/utils/gameUtils';
 import toast from 'react-hot-toast';
 
+// 数値フォーマット関数：右側の不要な0を削除
+const formatNumber = (num: number, decimalPlaces: number = 2): string => {
+  return parseFloat(num.toFixed(decimalPlaces)).toString();
+};
+
 interface ChemiPotProps {
   contents: Record<string, number>;
   onSalvage: (formula: string) => void;
@@ -34,7 +39,7 @@ export default function ChemiPot({ contents, onSalvage, userData, isProcessing }
     const { success, recoveredAmount } = attemptSalvage(formula, amount, userData);
 
     if (success) {
-      toast.success(`${ingredient.name} を回収しました！\n+¥${Math.floor(recoveredAmount)}`);
+      toast.success(`${ingredient.name} を回収しました！\n+¥${Math.ceil(recoveredAmount)}`);
       onSalvage(formula);
     } else {
       toast.error(`${ingredient.name} の回収に失敗しました...`);
@@ -90,7 +95,7 @@ export default function ChemiPot({ contents, onSalvage, userData, isProcessing }
                     {formatChemicalFormula(itemsArray[0][0])}
                   </div>
                   <div className="text-orange-600 text-xs">
-                    {Number(itemsArray[0][1]).toFixed(2)} mol
+                    {formatNumber(itemsArray[0][1])} mol
                   </div>
                   <button
                     onClick={() => handleSalvage(itemsArray[0][0])}
@@ -122,7 +127,7 @@ export default function ChemiPot({ contents, onSalvage, userData, isProcessing }
                     {formatChemicalFormula(itemsArray[1][0])}
                   </div>
                   <div className="text-orange-600 text-xs">
-                    {Number(itemsArray[1][1]).toFixed(2)} mol
+                    {formatNumber(itemsArray[1][1])} mol
                   </div>
                   <button
                     onClick={() => handleSalvage(itemsArray[1][0])}

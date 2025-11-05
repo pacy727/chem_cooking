@@ -4,6 +4,11 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
+// 数値フォーマット関数：右側の不要な0を削除
+const formatNumber = (num: number, decimalPlaces: number = 2): string => {
+  return parseFloat(num.toFixed(decimalPlaces)).toString();
+};
+
 interface ChefCommentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -84,31 +89,31 @@ export default function ChefCommentModal({ isOpen, onClose, lastResult, currentR
           <tr>
             <td className="border border-gray-300 p-2 font-semibold">反応前 (mol)</td>
             <td className="border border-gray-300 p-2">
-              {getInitialMol(reaction.reactants[0].formula, reactionResult).toFixed(2)}
+              {formatNumber(getInitialMol(reaction.reactants[0].formula, reactionResult))}
             </td>
             <td className="border border-gray-300 p-2">
-              {getInitialMol(reaction.reactants[1].formula, reactionResult).toFixed(2)}
+              {formatNumber(getInitialMol(reaction.reactants[1].formula, reactionResult))}
             </td>
             {reaction.products.map((_: any, index: number) => (
-              <td key={index} className="border border-gray-300 p-2">0.00</td>
+              <td key={index} className="border border-gray-300 p-2">{formatNumber(0)}</td>
             ))}
           </tr>
           <tr>
             <td className="border border-gray-300 p-2 font-semibold">反応量 (mol)</td>
             <td className="border border-gray-300 p-2">
               <span className="text-red-600">
-                -{getConsumedMol(reaction.reactants[0].formula, reactionResult).toFixed(2)}
+                -{formatNumber(getConsumedMol(reaction.reactants[0].formula, reactionResult))}
               </span>
             </td>
             <td className="border border-gray-300 p-2">
               <span className="text-red-600">
-                -{getConsumedMol(reaction.reactants[1].formula, reactionResult).toFixed(2)}
+                -{formatNumber(getConsumedMol(reaction.reactants[1].formula, reactionResult))}
               </span>
             </td>
             {reactionResult.producedMols.map((product: any, index: number) => (
               <td key={index} className="border border-gray-300 p-2">
                 <span className="text-blue-600">
-                  +{product.mols.toFixed(2)}
+                  +{formatNumber(product.mols)}
                 </span>
               </td>
             ))}
@@ -116,13 +121,13 @@ export default function ChefCommentModal({ isOpen, onClose, lastResult, currentR
           <tr>
             <td className="border border-gray-300 p-2 font-semibold">反応後 (mol)</td>
             <td className="border border-gray-300 p-2">
-              {getRemainingMol(reaction.reactants[0].formula, reactionResult).toFixed(2)}
+              {formatNumber(getRemainingMol(reaction.reactants[0].formula, reactionResult))}
             </td>
             <td className="border border-gray-300 p-2">
-              {getRemainingMol(reaction.reactants[1].formula, reactionResult).toFixed(2)}
+              {formatNumber(getRemainingMol(reaction.reactants[1].formula, reactionResult))}
             </td>
             {reactionResult.producedMols.map((product: any, index: number) => (
-              <td key={index} className="border border-gray-300 p-2">{product.mols.toFixed(2)}</td>
+              <td key={index} className="border border-gray-300 p-2">{formatNumber(product.mols)}</td>
             ))}
           </tr>
         </tbody>

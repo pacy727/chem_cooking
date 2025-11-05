@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { UserData, Order, Recipe } from '../../../lib/types';
 import { RECIPES, CUSTOMERS, INGREDIENTS } from '../../../lib/data/gameData';
-import { findReaction, calculateReactionMols } from '../../../lib/data/reactions';
+import { findReaction, calculateReactionMols, CHEMICAL_REACTIONS } from '../../../lib/data/reactions';
 import { generateLevelBasedOrder, LevelBasedOrder, CUSTOMER_TYPES } from '../../../lib/data/levelBasedOrders';
 import { 
   calculateLevelUp, 
@@ -21,6 +21,11 @@ import Pantry from '../game/Pantry';
 import ChemiPot from '../game/ChemiPot';
 import { Star, Home, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+// 数値フォーマット関数：右側の不要な0を削除
+const formatNumber = (num: number, decimalPlaces: number = 2): string => {
+  return parseFloat(num.toFixed(decimalPlaces)).toString();
+};
 
 interface GameScreenProps {
   userData: UserData | null;
@@ -41,6 +46,7 @@ export default function GameScreen({
   const [potContents, setPotContents] = useState<Record<string, number>>({});
   const [currentOrder, setCurrentOrder] = useState<LevelBasedOrder | null>(null);
   const [currentRecipe, setCurrentRecipe] = useState<any>(null);
+  const [relatedReactions, setRelatedReactions] = useState<any[]>([]); // 関連する反応式リスト
   const [isProcessing, setIsProcessing] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [reactionCompleted, setReactionCompleted] = useState(false); // 反応完了フラグ
@@ -71,6 +77,22 @@ export default function GameScreen({
       setMoney(userData.money);
     }
   }, [userData]);
+
+  // 関連する反応を検索する関数
+  const findRelatedReactions = (targetProduct: string, maxReactions: number = 5) => {
+    // 目標生成物を含む反応を検索
+    const reactions = CHEMICAL_REACTIONS.filter(reaction => 
+      reaction.products.some(product => product.formula === targetProduct)
+    );
+    
+    // 6個以上ある場合はランダムに5個選択
+    if (reactions.length > maxReactions) {
+      const shuffled = [...reactions].sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, maxReactions);
+    }
+    
+    return reactions;
+  };
 
   const generateOrder = () => {
     // ユーザーレベルに基づいて注文を生成
@@ -115,8 +137,10 @@ export default function GameScreen({
     setMaterialCosts(0); // 材料費もリセット
   };
 
+
+
   const updateMoney = (change: number) => {
-    const newMoney = money + change;
+    const newMoney = Math.ceil(money + change);
     setMoney(newMoney);
     
     if (userData) {
@@ -343,7 +367,7 @@ export default function GameScreen({
     }
     
     const molAmount = convertToMol(amount, unit, formula);
-    const cost = molAmount * 100; // 100円/mol
+    const cost = Math.ceil(molAmount * 100); // 100円/mol、切り上げ
     
     if (money < cost) {
       toast.error('お金が足りません！');
@@ -362,12 +386,12 @@ export default function GameScreen({
     // 詳細情報付きトースト
     if (unit === 'mL') {
       const concentration = currentConcentrations[formula] || 1.0;
-      toast.success(`${formula} ${Number(molAmount).toFixed(3)} mol を追加しました！\n(${concentration}M × ${amount}mL)`);
+      toast.success(`${formula} ${formatNumber(molAmount, 3)} mol を追加しました！\n(${concentration}M × ${amount}mL)`);
     } else if (unit === 'g') {
       const molarMass = MOLAR_MASSES[formula] || 100;
-      toast.success(`${formula} ${Number(molAmount).toFixed(3)} mol を追加しました！\n(${amount}g ÷ ${molarMass}g/mol)`);
+      toast.success(`${formula} ${formatNumber(molAmount, 3)} mol を追加しました！\n(${amount}g ÷ ${molarMass}g/mol)`);
     } else {
-      toast.success(`${formula} ${Number(molAmount).toFixed(3)} mol を追加しました！`);
+      toast.success(`${formula} ${formatNumber(molAmount, 3)} mol を追加しました！`);
     }
   };
 
@@ -384,9 +408,19 @@ export default function GameScreen({
       return;
     }
     
+    if (!currentOrder) {
+      toast.error('注文が見つかりません！');
+      return;
+    }
+    
     updateMoney(-recipeCost);
+    
+    // 目標生成物に関連する反応を検索
+    const reactions = findRelatedReactions(currentOrder.targetProduct);
+    setRelatedReactions(reactions);
+    
     setShowRecipeHint(true);
-    toast.success('レシピを購入しました！');
+    toast.success(`反応情報を購入しました！\n${reactions.length}個の関連反応が見つかりました。`);
   };
 
   const performReaction = async () => {
@@ -442,10 +476,10 @@ export default function GameScreen({
     if (currentOrder) {
       const baseBonus = 1000;
       const customerMultiplier = currentOrder.bonusMultiplier || 1.0;
-      const orderBonus = baseBonus * result.bonusRate * customerMultiplier;
+      const orderBonus = Math.ceil(baseBonus * result.bonusRate * customerMultiplier);
       
       // 成功時は材料費も返却
-      const materialRefund = result.bonusRate > 0 ? materialCosts : 0;
+      const materialRefund = result.bonusRate > 0 ? Math.ceil(materialCosts) : 0;
       moneyChange = orderBonus + materialRefund;
     }
     
@@ -524,7 +558,7 @@ export default function GameScreen({
       
       // 未反応物質がある場合の追加コメント
       if (unreacted.length > 0) {
-        const unreactedList = unreacted.map(item => `${item.formula} ${Number(item.amount).toFixed(2)} mol`).join(', ');
+        const unreactedList = unreacted.map(item => `${item.formula} ${formatNumber(item.amount)} mol`).join(', ');
         feedbackMsg += `\n（${unreactedList} が残っています）`;
       }
       
@@ -532,18 +566,18 @@ export default function GameScreen({
       if (currentOrder) {
         const baseBonus = 1000;
         const customerMultiplier = currentOrder.bonusMultiplier || 1.0;
-        const orderBonus = baseBonus * result.bonusRate * customerMultiplier;
-        const materialRefund = result.bonusRate > 0 ? materialCosts : 0;
+        const orderBonus = Math.ceil(baseBonus * result.bonusRate * customerMultiplier);
+        const materialRefund = result.bonusRate > 0 ? Math.ceil(materialCosts) : 0;
         
         if (materialRefund > 0) {
-          feedbackMsg += `\n注文報酬: +${Number(orderBonus).toFixed(0)}円`;
-          feedbackMsg += `\n材料費返却: +${Number(materialRefund).toFixed(0)}円`;
-          feedbackMsg += `\n合計: +${Number(moneyChange).toFixed(0)}円`;
+          feedbackMsg += `\n注文報酬: +${orderBonus}円`;
+          feedbackMsg += `\n材料費返却: +${materialRefund}円`;
+          feedbackMsg += `\n合計: +${moneyChange}円`;
         } else {
-          feedbackMsg += `\n+${Number(moneyChange).toFixed(0)}円`;
+          feedbackMsg += `\n+${moneyChange}円`;
         }
       } else {
-        feedbackMsg += `\n+${Number(moneyChange).toFixed(0)}円`;
+        feedbackMsg += `\n+${moneyChange}円`;
       }
     } else {
       if (result.code === 'NO_REACTION') {
@@ -560,7 +594,7 @@ export default function GameScreen({
       
       // 失敗理由の詳細表示
       if (unreacted.length > 0) {
-        const unreactedList = unreacted.map(item => `${item.formula} ${Number(item.amount).toFixed(2)} mol`).join(', ');
+        const unreactedList = unreacted.map(item => `${item.formula} ${formatNumber(item.amount)} mol`).join(', ');
         feedbackMsg += `\n（${unreactedList} が混入しています...）`;
       }
       
@@ -652,6 +686,8 @@ export default function GameScreen({
     generateOrder();
     setFilterCategory('all');
     setReactionCompleted(false); // 反応ボタンを再有効化
+    setRelatedReactions([]); // 関連反応もクリア
+    setShowRecipeHint(false); // レシピヒントもリセット
   };
 
   const retry = () => {
@@ -825,49 +861,29 @@ export default function GameScreen({
               <div className="bg-white rounded-lg border border-gray-200 p-3 overflow-hidden" style={{ height: '25%' }}>
                 <h3 className="text-sm font-semibold text-green-800 mb-2">📖 反応情報</h3>
                 <div className="h-full">
-                  {showRecipeHint && currentRecipe ? (
-                    <div className="p-3 bg-green-100 rounded-lg border border-green-300 h-full overflow-y-auto">
-                      <h4 className="text-base font-bold text-green-800 mb-3">反応の詳細</h4>
-                      
-                      <div className="mb-3">
-                        <h5 className="text-sm font-semibold text-green-700 mb-2">反応式:</h5>
-                        <p className="text-sm font-mono bg-white p-2 rounded border">
-                          {currentRecipe.equation}
-                        </p>
-                      </div>
-
-                      <div className="mb-3">
-                        <h5 className="text-sm font-semibold text-green-700 mb-2">必要な反応物:</h5>
-                        <div className="space-y-1">
-                          {currentRecipe.reactants?.map((reactant: any, index: number) => (
-                            <div key={index} className="flex justify-between text-sm">
-                              <span className="text-green-700">{reactant.formula}</span>
-                              <span className="font-semibold text-green-800">係数: {reactant.coefficient}</span>
-                            </div>
-                          ))}
+                  {showRecipeHint && relatedReactions.length > 0 ? (
+                    <div className="h-full overflow-y-auto space-y-2 pb-2">
+                      {relatedReactions.map((reaction, index) => (
+                        <div 
+                          key={reaction.id}
+                          className="text-center p-3 bg-green-50 rounded-lg border border-green-200 shadow-sm"
+                        >
+                          <div 
+                            className="text-lg font-bold text-green-800"
+                            style={{ 
+                              fontFamily: 'Georgia, "Times New Roman", serif',
+                              letterSpacing: '0.3px',
+                              textShadow: '0 1px 1px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            {reaction.equation}
+                          </div>
                         </div>
-                      </div>
-
-                      <div className="mb-3">
-                        <h5 className="text-sm font-semibold text-green-700 mb-2">生成物:</h5>
-                        <div className="space-y-1">
-                          {currentRecipe.products?.map((product: any, index: number) => (
-                            <div key={index} className="flex justify-between text-sm">
-                              <span className="text-green-700">{product.formula}</span>
-                              <span className="font-semibold text-green-800">係数: {product.coefficient}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <h5 className="text-sm font-semibold text-green-700 mb-2">レベル:</h5>
-                        <p className="text-sm text-green-600">Level {currentRecipe.level}</p>
-                      </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full">
-                      <p className="text-gray-500 italic text-sm mb-3">反応情報を購入して詳細を確認しましょう</p>
+                      <p className="text-gray-500 italic text-sm mb-3">反応情報を購入して化学反応式を確認しましょう</p>
                       <button 
                         onClick={buyRecipe}
                         className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-yellow-600 transition shadow-md"
@@ -884,66 +900,84 @@ export default function GameScreen({
                 <h3 className="text-sm font-semibold text-gray-800 mb-2">🍽️ お皿</h3>
                 
                 <div className="grid grid-cols-2 gap-2 overflow-hidden" style={{ height: 'calc(100% - 30px)' }}>
-                  {/* 左側：生成物質・未反応物質 */}
-                  <div className="bg-white rounded p-2 border border-gray-200 flex flex-col overflow-hidden">
-                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">生成物・未反応物</h4>
-                    <div className="flex-1 space-y-1 overflow-y-auto">
-                      {plateProducts.length === 0 && plateUnreacted.length === 0 ? (
-                        <p className="text-gray-500 italic text-sm">まだ何も生成されていません...</p>
-                      ) : (
-                        <>
-                          {plateProducts.map((product, index) => (
-                            <div key={`product-${index}`} className="p-1.5 bg-green-50 rounded border border-green-200">
-                              <span className="font-semibold text-green-700 text-sm">{product.formula}</span>
-                              <span className="text-green-600 ml-2 text-sm">{Number(product.amount).toFixed(2)} mol</span>
-                              <div className="text-sm text-gray-600 truncate">{product.name}</div>
+                  {/* 左側：生成物質・未反応物質 - お皿のデザイン */}
+                  <div className="relative flex flex-col overflow-hidden">
+                    {/* お皿の背景 */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-32 h-32 bg-white rounded-full shadow-lg border-4 border-gray-200 opacity-80"></div>
+                    </div>
+                    
+                    {/* コンテンツ */}
+                    <div className="relative z-10 p-2 flex flex-col h-full">
+                      <div className="flex-1 overflow-y-auto">
+                        {/* 生成物セクション */}
+                        {plateProducts.length > 0 && (
+                          <div className="mb-3">
+                            <div className="text-xs font-semibold text-green-700 mb-1">生成物</div>
+                            <div className="space-y-1">
+                              {plateProducts.map((product, index) => (
+                                <div key={`product-${index}`} className="text-center">
+                                  <div className="text-sm font-semibold text-green-700">
+                                    {product.formula} {formatNumber(product.amount)} mol
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                          {plateUnreacted.map((unreacted, index) => (
-                            <div key={`unreacted-${index}`} className="p-1.5 bg-red-50 rounded border border-red-200">
-                              <span className="font-semibold text-red-700 text-sm">{unreacted.formula}</span>
-                              <span className="text-red-600 ml-2 text-sm">{Number(unreacted.amount).toFixed(2)} mol</span>
-                              <div className="text-sm text-gray-600 truncate">{unreacted.name}</div>
+                          </div>
+                        )}
+                        
+                        {/* 未反応物セクション */}
+                        {plateUnreacted.length > 0 && (
+                          <div>
+                            <div className="text-xs font-semibold text-red-700 mb-1">残り</div>
+                            <div className="space-y-1">
+                              {plateUnreacted.map((unreacted, index) => (
+                                <div key={`unreacted-${index}`} className="text-center">
+                                  <div className="text-sm font-semibold text-red-700">
+                                    {unreacted.formula} {formatNumber(unreacted.amount)} mol
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </>
-                      )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
-                  {/* 右側：お客様の反応 */}
-                  <div className="bg-purple-50 rounded p-2 border border-purple-200 flex flex-col overflow-hidden">
-                    <h4 className="font-semibold text-purple-700 mb-2 text-sm">💬 お客様の反応</h4>
-                    <div className="flex-1 text-purple-700 overflow-y-auto text-sm">
-                      {customerFeedbackMsg ? (
-                        <div className="whitespace-pre-line">
-                          {customerFeedbackMsg.split('\n').map((line, index) => (
-                            <div key={index} className={index === 0 ? 'text-sm font-bold' : 'text-sm'}>
-                              {line}
-                            </div>
-                          ))}
+                  {/* 右側：お客様の反応 - 透明背景 */}
+                  <div className="flex flex-col overflow-hidden p-2">
+                    {customerFeedbackMsg && (
+                      <>
+                        <h4 className="font-semibold text-purple-700 mb-2 text-sm">💬 お客様の反応</h4>
+                        <div className="flex-1 text-purple-700 overflow-y-auto text-sm">
+                          <div className="whitespace-pre-line">
+                            {customerFeedbackMsg.split('\n').map((line, index) => (
+                              <div key={index} className={index === 0 ? 'text-sm font-bold' : 'text-sm'}>
+                                {line}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ) : (
-                        <p className="text-gray-500 italic text-sm">お客様の反応を待っています...</p>
-                      )}
-                    </div>
-                    
-                    {/* 結果ボタン */}
-                    {showResults && (
-                      <div className="mt-2 space-y-1 flex-shrink-0">
-                        <button 
-                          onClick={nextOrder}
-                          className="w-full bg-green-600 text-white font-bold py-1.5 rounded hover:bg-green-700 transition text-sm"
-                        >
-                          次の注文へ →
-                        </button>
-                        <button 
-                          onClick={() => setShowChefCommentModal(true)}
-                          className="w-full bg-yellow-600 text-white font-bold py-1.5 rounded hover:bg-yellow-700 transition text-sm"
-                        >
-                          👨‍🍳 シェフのコメント
-                        </button>
-                      </div>
+                        
+                        {/* 結果ボタン */}
+                        {showResults && (
+                          <div className="mt-2 space-y-1 flex-shrink-0">
+                            <button 
+                              onClick={nextOrder}
+                              className="w-full bg-green-600 text-white font-bold py-1.5 rounded hover:bg-green-700 transition text-sm"
+                            >
+                              次の注文へ →
+                            </button>
+                            <button 
+                              onClick={() => setShowChefCommentModal(true)}
+                              className="w-full bg-yellow-600 text-white font-bold py-1.5 rounded hover:bg-yellow-700 transition text-sm"
+                            >
+                              👨‍🍳 シェフのコメント
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

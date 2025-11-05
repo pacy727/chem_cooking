@@ -1,8 +1,9 @@
 // app/components/modals/SkillModal.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
 import { UserData } from '../../../lib/types';
-import { X, Plus } from 'lucide-react';
+import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface SkillModalProps {
@@ -13,54 +14,72 @@ interface SkillModalProps {
 }
 
 export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }: SkillModalProps) {
+  const [localUserData, setLocalUserData] = useState<UserData>(userData);
+
+  // userDataが変更されたときにlocalUserDataを更新
+  useEffect(() => {
+    setLocalUserData({ ...userData });
+  }, [userData]);
+
+  // モーダルが開かれるたびにuserDataで初期化
+  useEffect(() => {
+    if (isOpen) {
+      setLocalUserData({ ...userData });
+    }
+  }, [isOpen, userData]);
+
   if (!isOpen) return null;
 
   const upgradeSkill = (skillName: keyof UserData['skills']) => {
-    if (userData.skillPoints <= 0) {
+    const currentLevel = localUserData.skills[skillName];
+    
+    if (localUserData.skillPoints <= 0) {
       toast.error('スキルポイントが足りません！');
       return;
     }
 
-    if (userData.skills[skillName] >= 3) {
+    if (currentLevel >= 3) {
       toast.error('このスキルは最大レベルです！');
       return;
     }
 
+    const newLevel = currentLevel + 1;
     const updatedUserData = {
-      ...userData,
+      ...localUserData,
       skills: {
-        ...userData.skills,
-        [skillName]: userData.skills[skillName] + 1
+        ...localUserData.skills,
+        [skillName]: newLevel
       },
-      skillPoints: userData.skillPoints - 1
+      skillPoints: localUserData.skillPoints - 1
     };
 
+    setLocalUserData(updatedUserData);
     onSkillUpdate(updatedUserData);
 
     const skillNames = {
-      cost_reduction: '仕入れ上手',
-      recipe_discount: 'レシピ研究',
+      cost_reduction: '材料費削減',
+      recipe_discount: 'レシピ割引',
       hospitality: 'おもてなし',
       chef_personality: 'シェフの人柄',
       word_of_mouth: '口コミ評価',
       salvage: 'サルベージ'
     };
 
-    toast.success(`${skillNames[skillName]} をレベルアップしました！\nLv.${updatedUserData.skills[skillName]}`);
+    toast.success(`${skillNames[skillName]} をレベルアップしました！\nLv.${newLevel}`);
   };
 
   const skillData = [
     {
       key: 'cost_reduction' as const,
-      title: '仕入れ上手',
+      title: '材料費削減',
       baseDescription: '材料費を削減します',
-      details: ['0%', '5%', '10%', '20%'],
+      details: ['0%', '10%', '20%', '30%'],
       icon: '💰',
       color: 'purple'
     },
     {
       key: 'recipe_discount' as const,
-      title: 'レシピ研究',
+      title: 'レシピ割引',
       baseDescription: 'レシピ購入費が安くなります',
       details: ['300円', '200円', '100円', '50円'],
       icon: '📚',
@@ -112,29 +131,26 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
         
         <div className="mb-4 p-3 bg-blue-100 rounded-lg">
           <p className="text-blue-800 font-semibold">
-            スキルポイント: {userData.skillPoints}
+            スキルポイント: {localUserData.skillPoints}
           </p>
           <p className="text-sm text-blue-600">調理の成功でスキルポイントが獲得できます</p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {skillData.map((skill) => {
-            const level = userData.skills[skill.key] || 0;
+            const level = localUserData.skills[skill.key] || 0;
             const isMaxLevel = level >= 3;
-            const canUpgrade = userData.skillPoints > 0 && !isMaxLevel;
-
-            console.log(`スキル: ${skill.title}, レベル: ${level}`);
+            const canUpgrade = localUserData.skillPoints > 0 && !isMaxLevel;
 
             // 説明テキストの生成
             const getDescriptionText = () => {
-              // 安全な配列アクセス
               const currentValue = skill.details[level] || `レベル${level}`;
               const nextValue = skill.details[level + 1] || `レベル${level + 1}`;
               
               if (isMaxLevel) {
                 return `${skill.baseDescription}\n（現在: ${currentValue}）`;
               } else {
-                return `${skill.baseDescription}\n（${currentValue} → ${nextValue}）`;
+                return `${skill.baseDescription}\n（現在${currentValue} → ${nextValue}）`;
               }
             };
 
@@ -154,7 +170,7 @@ export default function SkillModal({ isOpen, onClose, userData, onSkillUpdate }:
                         : 'bg-gray-400 text-gray-200 cursor-not-allowed'
                     }`}
                   >
-                    <Plus className="w-4 h-4 mx-auto" />
+                    +
                   </button>
                 </div>
                 

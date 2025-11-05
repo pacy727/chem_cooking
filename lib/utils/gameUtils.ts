@@ -87,7 +87,7 @@ export function calculateRank(level: number, totalSales: number): UserData['rank
   return 'apprentice';
 }
 
-// 材料費計算（スキル効果適用）
+// 材料費計算（スキル効果適用、整数化）
 export function calculateIngredientCost(formula: string, amount: number, userData: UserData | null): number {
   const ingredient = INGREDIENTS[formula];
   let cost = ingredient.price * amount;
@@ -97,7 +97,7 @@ export function calculateIngredientCost(formula: string, amount: number, userDat
     cost *= (1 - reductionRate);
   }
   
-  return cost;
+  return Math.ceil(cost); // 切り上げで整数化
 }
 
 // レシピ購入費計算（スキル効果適用）
@@ -107,7 +107,7 @@ export function calculateRecipeCost(userData: UserData | null): number {
   return SKILL_RECIPE_DISCOUNT[userData.skills.recipe_discount] || 500;
 }
 
-// 材料サルベージ判定
+// 材料サルベージ判定（整数化）
 export function attemptSalvage(formula: string, amount: number, userData: UserData | null): { success: boolean; recoveredAmount: number } {
   let recoveryRate = 0.5; // 基本50%
   
@@ -116,7 +116,7 @@ export function attemptSalvage(formula: string, amount: number, userData: UserDa
   }
   
   const success = recoveryRate > 0 && Math.random() < 0.7; // 70%の確率で回収判定
-  const recoveredAmount = success ? calculateIngredientCost(formula, amount, userData) * recoveryRate : 0;
+  const recoveredAmount = success ? Math.ceil(calculateIngredientCost(formula, amount, userData) * recoveryRate) : 0;
   
   return { success, recoveredAmount };
 }
@@ -140,7 +140,7 @@ export function checkVipCustomer(userData: UserData | null): boolean {
   return Math.random() < (baseVipChance * vipRate);
 }
 
-// 化学反応計算
+// 化学反応計算（整数化）
 export function calculateReaction(
   potContents: Record<string, number>,
   recipe: Recipe,
@@ -222,7 +222,7 @@ export function calculateReaction(
     mols: productMols
   };
   
-  // 材料費回収計算（サルベージスキル）
+  // 材料費回収計算（サルベージスキル、整数化）
   let totalCost = 0;
   if (userData) {
     const salvageRate = SKILL_SALVAGE[userData.skills.salvage] || 0;
@@ -238,7 +238,7 @@ export function calculateReaction(
       }
       
       if (salvageRate > 0 && Math.random() < 0.7) { // 70%の確率でサルベージ
-        totalCost += price * used * salvageRate;
+        totalCost += Math.ceil(price * used * salvageRate); // 切り上げで整数化
       }
     }
   }
