@@ -19,10 +19,10 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
 
   // ランク情報
   const rankData = {
-    'apprentice': { icon: '🥉', name: '見習いシェフ', description: 'まだまだ修行が必要です' },
-    'intermediate': { icon: '🥈', name: '一人前シェフ', description: '基本的な料理はお任せください' },
-    'expert': { icon: '🥇', name: 'ベテランシェフ', description: '複雑な反応もお手のもの' },
-    'master': { icon: '👑', name: 'マスターシェフ', description: '化学反応の達人です' },
+    'apprentice': { icon: '🍽️', name: '見習いシェフ', description: 'まだまだ修行が必要です' },
+    'intermediate': { icon: '🥄', name: '一人前シェフ', description: '基本的な料理はお任せください' },
+    'expert': { icon: '🍳', name: 'ベテランシェフ', description: '複雑な反応もお手のもの' },
+    'master': { icon: '👨‍🍳', name: 'マスターシェフ', description: '化学反応の達人です' },
     'legend': { icon: '⭐', name: 'レジェンドシェフ', description: '伝説のシェフです！' }
   };
 
@@ -40,7 +40,7 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
       <div className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-xl">
         <div className="flex justify-between items-center mb-6">
           <h1 className="font-lobster text-5xl font-bold text-yellow-600" style={{ fontFamily: 'Lobster, cursive' }}>
-            La Cucina Chimica
+            {userData.storeName}
           </h1>
           <button 
             onClick={onLogout}
@@ -52,7 +52,19 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
         
         <p className="text-xl text-gray-700 mb-6">
           ようこそ、<span className="font-bold">{userData.chefName}</span> シェフ！ 
-          (<span className="font-semibold">{userData.storeName}</span>)
+          {(() => {
+            const greetings = [
+              "今日もお客様の笑顔のために☺",
+              "素晴らしい一日になりそうですね✨",
+              "美味しい化学反応を作りましょう🧪",
+              "今日も元気に調理しましょう🍳",
+              "お客様をびっくりさせちゃいましょう😊",
+              "新しいレシピに挑戦してみませんか？🌟",
+              "今日はどんな発見があるでしょうか💡"
+            ];
+            const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+            return <span className="ml-2 text-gray-600">{randomGreeting}</span>;
+          })()}
         </p>
 
         {/* スタートボタンとスキルボタン */}
@@ -72,69 +84,53 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* 左：お店ランクとステータス */}
-          <div className="bg-yellow-50 p-6 rounded-xl border-2 border-yellow-200">
-            <h3 className="text-2xl font-semibold text-yellow-800 mb-4">お店ステータス</h3>
-            
-            {/* ランク表示 */}
-            <div className="mb-4">
-              <h4 className="text-lg font-semibold text-gray-700">お店ランク</h4>
-              <div className="flex items-center gap-2">
-                <span className="text-3xl">{currentRankData.icon}</span>
-                <div>
-                  <p className="text-xl font-bold text-gray-800">{currentRankData.name}</p>
-                  <p className="text-sm text-gray-600">{currentRankData.description}</p>
-                </div>
-              </div>
-            </div>
-            
-            {/* 経験値とレベル */}
-            <div className="mb-4">
-              <h4 className="text-lg font-semibold text-gray-700">シェフレベル</h4>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-blue-600">Lv.{userData.level}</span>
-                <div className="flex-1">
-                  <div className="bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-blue-500 h-3 rounded-full transition-all duration-500" 
-                      style={{ width: `${expProgress}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {userData.exp} / {expForNextLevel} EXP
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            {/* 総売上 */}
-            <div className="mb-4">
-              <h4 className="text-lg font-semibold text-gray-700">総売上</h4>
-              <p className="text-2xl font-bold text-green-600">¥{userData.totalSales.toLocaleString()}</p>
-            </div>
-            
-            {/* 現在所持金 */}
-            <div>
-              <h4 className="text-lg font-semibold text-gray-700">所持金</h4>
-              <p className="text-xl font-semibold text-yellow-600">¥{userData.money.toLocaleString()}</p>
-            </div>
-          </div>
           
-          {/* 右：最近の実績 */}
-          <div className="bg-green-50 p-6 rounded-xl border-2 border-green-200">
-            <h3 className="text-2xl font-semibold text-green-800 mb-4">最近の実績</h3>
-            <div className="space-y-3">
-              {userData.achievements.length > 0 ? (
-                userData.achievements.slice(-5).map((achievement, index) => (
-                  <div key={index} className="p-2 bg-white rounded-lg border border-green-200">
-                    <p className="text-green-700">{achievement}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-600 italic">まだ実績がありません。調理を始めましょう！</p>
+          {/* 左：資本金とステータス */}
+          <div className="md:col-span-1 space-y-4">
+            {/* 資本金 */}
+            <div className="bg-gray-50 p-4 rounded-lg shadow-md text-center">
+              <h3 className="text-lg font-semibold text-gray-700 mb-2">資本金</h3>
+              <p className="text-3xl font-bold text-gray-800">¥{Math.floor(userData.money).toLocaleString()}</p>
+              <p className="text-sm text-gray-500 mt-2">
+                ランク: <span className="text-lg">{currentRankData.icon}</span> 
+                (総売上: <span className="font-bold">¥{Math.floor(userData.totalSales).toLocaleString()}</span>)
+              </p>
+              {userData.rank === 'legend' && (
+                <p className="text-sm font-bold text-purple-600">★レジェンドボーナス x5 適用中★</p>
               )}
             </div>
+            
+            {/* シェフステータス */}
+            <div className="bg-gray-50 p-4 rounded-lg shadow-md">
+              <h3 className="text-lg font-semibold text-gray-700 mb-3">シェフ ステータス</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-baseline">
+                  <p>レベル: <span className="font-bold text-lg text-blue-600">Lv.{userData.level}</span></p>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-4">
+                  <div 
+                    className="bg-blue-500 h-4 rounded-full transition-all duration-500" 
+                    style={{ width: `${expProgress}%` }}
+                  ></div>
+                </div>
+                <p className="text-sm text-gray-500 text-right">
+                  EXP: {userData.exp} / {expForNextLevel}
+                </p>
+              </div>
+            </div>
           </div>
+
+          {/* 右：ランキング */}
+          <div className="md:col-span-1 bg-gray-50 p-4 rounded-lg shadow-md">
+            <h3 className="text-lg font-semibold text-gray-700 mb-3">ランキング (総売上)</h3>
+            <div className="space-y-2">
+              <p>🥇 1位: ラ・キミカ (¥15,000)</p>
+              <p>🥈 2位: モル亭 (¥12,000)</p>
+              <p>🥉 3位: キッチンイオン (¥8,000)</p>
+              <p className="text-xs text-gray-400 mt-4 text-center">（ランキング機能は開発中です）</p>
+            </div>
+          </div>
+
         </div>
       </div>
 

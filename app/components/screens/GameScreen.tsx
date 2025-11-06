@@ -22,7 +22,28 @@ import ChemiPot from '../game/ChemiPot';
 import { Star, Home, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// 数値フォーマット関数：右側の不要な0を削除
+  // 評価絵文字を決定する関数
+  const getEvaluationEmoji = (message: string, bonusRate: number) => {
+    // 注文不一致の場合
+    if (message.includes('注文と違い')) {
+      return '💀'; // 完全に間違い
+    }
+    
+    // bonusRateに基づく評価
+    if (bonusRate >= 1.0) {
+      return '🤩'; // パーフェクト
+    } else if (bonusRate >= 0.8) {
+      return '😘'; // 優秀
+    } else if (bonusRate >= 0.3) {
+      return '😥'; // 及第点だが失敗
+    } else if (bonusRate > 0) {
+      return '🤢'; // 悪い
+    } else {
+      return '😡'; // 失敗
+    }
+  };
+
+  // 数値フォーマット関数：右側の不要な0を削除
 const formatNumber = (num: number, decimalPlaces: number = 2): string => {
   return parseFloat(num.toFixed(decimalPlaces)).toString();
 };
@@ -137,7 +158,11 @@ export default function GameScreen({
     setMaterialCosts(0); // 材料費もリセット
   };
 
-
+  const clearPotWithoutOrder = () => {
+    setPotContents({});
+    setMaterialCosts(0); // 材料費もリセット
+    resetPlate();
+  };
 
   const updateMoney = (change: number) => {
     const newMoney = Math.ceil(money + change);
@@ -201,18 +226,62 @@ export default function GameScreen({
       const productMol = matchingProduct.mols;
       const difference = Math.abs(productMol - targetMol);
       
+      // 未反応物（反応物のみ）の計算
+      const reactants = reaction.reactants || [];
+      const reactantUnreactedAmount = reactionResult.remainingMols?.reduce((total: number, remaining: any) => {
+        if (reactants.includes(remaining.formula)) {
+          return total + remaining.mols;
+        }
+        return total;
+      }, 0) || 0;
+      
+      // 未反応物の割合（目的生成物のmol数に対する比率）
+      const unreactedRatio = productMol > 0 ? reactantUnreactedAmount / productMol : 0;
+      
+      // まず生成物の精度で基本レベルを決定
+      let baseLevel = '';
       if (difference <= 0.01) {
-        bonusRate = 1.0;
-        success = true;
+        baseLevel = 'perfect';
       } else if (difference <= targetMol * 0.1) {
-        bonusRate = 0.8;
-        success = true;
+        baseLevel = 'excellent';
       } else if (difference <= targetMol * 0.3) {
-        bonusRate = 0.5;
-        success = true;
+        baseLevel = 'passing';
       } else {
-        bonusRate = 0.2;
-        success = true;
+        baseLevel = 'fail';
+      }
+      
+      // 未反応物の割合で最終判定を決定
+      if (unreactedRatio > 0.2) {
+        // 未反応物が20%を超える場合: どうであれ失敗
+        bonusRate = 0;
+        success = false;
+      } else if (unreactedRatio > 0.1) {
+        // 未反応物が10%-20%: パーフェクト、優秀でも及第点
+        if (baseLevel === 'perfect' || baseLevel === 'excellent') {
+          bonusRate = 0.3;
+          success = false; // 及第点は失敗扱い
+        } else if (baseLevel === 'passing') {
+          bonusRate = 0.3;
+          success = false;
+        } else {
+          bonusRate = 0;
+          success = false;
+        }
+      } else {
+        // 未反応物が10%以下: パーフェクトでも優秀でもOK
+        if (baseLevel === 'perfect') {
+          bonusRate = 1.0;
+          success = true;
+        } else if (baseLevel === 'excellent') {
+          bonusRate = 0.8;
+          success = true;
+        } else if (baseLevel === 'passing') {
+          bonusRate = 0.3;
+          success = false; // 及第点は失敗扱い
+        } else {
+          bonusRate = 0;
+          success = false;
+        }
       }
     }
     
@@ -233,7 +302,7 @@ export default function GameScreen({
       orderMatch,
       targetProduct,
       targetMol,
-      chefComment: generateChefComment(reaction, reactionResult, orderMatch, success, bonusRate)
+      chefComment: generateChefComment(reaction, reactionResult, orderMatch, success, bonusRate, order)
     };
   };
   
@@ -243,20 +312,106 @@ export default function GameScreen({
     reactionResult: any,
     orderMatch: boolean,
     success: boolean,
-    bonusRate: number
+    bonusRate: number,
+    order: any
   ) => {
     if (!orderMatch) {
       return `${reaction.equation}の反応が起こりましたが、注文された物質ではありませんね。注文をよく確認してください。`;
     }
     
-    if (bonusRate >= 1.0) {
-      return `完璧です！${reaction.equation}の反応で正確な量の生成物ができました。化学量論の計算が正確でした。`;
-    } else if (bonusRate >= 0.8) {
-      return `良い結果です。${reaction.equation}の反応は成功しましたが、量が少し違います。mol計算を見直してみましょう。`;
-    } else if (bonusRate >= 0.5) {
-      return `反応は起こりましたが、生成量に問題があります。制限反応剤の概念を理解して、正確なmol計算をしましょう。`;
+    // 注文情報を正確に取得
+    const targetProduct = order.targetProduct;
+    const targetMol = order.targetMol;
+    
+    // 実際の生成量を取得
+    const actualProduct = reactionResult.producedMols?.find((p: any) => p.formula === targetProduct);
+    const actualMol = actualProduct ? actualProduct.mols : 0;
+    const difference = Math.abs(actualMol - targetMol);
+    const differenceRatio = difference / targetMol;
+    
+    // 未反応物の情報を取得（反応物のみを対象）
+    // 反応の反応物（左辺）を特定
+    const reactants = reaction.reactants || [];
+    
+    // 反応物の未反応分のみを計算
+    const reactantUnreactedAmount = reactionResult.remainingMols?.reduce((total: number, remaining: any) => {
+      // 反応物リストに含まれる物質のみカウント
+      if (reactants.includes(remaining.formula)) {
+        return total + remaining.mols;
+      }
+      return total;
+    }, 0) || 0;
+    
+    // 生成量の目標に対する達成率
+    const productionRatio = actualMol / targetMol;
+    
+    // 未反応物の割合（目的生成物のmol数に対する比率）
+    const unreactedRatio = actualMol > 0 ? reactantUnreactedAmount / actualMol : 0;
+    
+    // 生成物の精度レベルを判定
+    let accuracyLevel = '';
+    if (difference <= 0.01) {
+      accuracyLevel = 'perfect';
+    } else if (difference <= targetMol * 0.1) {
+      accuracyLevel = 'excellent';
+    } else if (difference <= targetMol * 0.3) {
+      accuracyLevel = 'acceptable';
     } else {
-      return `反応は確認できましたが、注文量との差が大きすぎます。化学量論比を正確に計算してください。`;
+      accuracyLevel = 'poor';
+    }
+    
+    // ケース別コメント生成（新フォーマット）
+    const statusLine = `料理の生成量: ${(productionRatio * 100).toFixed(1)}%、未反応割合: ${(unreactedRatio * 100).toFixed(1)}%`;
+    
+    if (bonusRate >= 1.0) {
+      // パーフェクト成功
+      return `${statusLine}\n完璧ネ！注文通り正確に作れたヨ！プロの腕だネ！`;
+      
+    } else if (bonusRate >= 0.8) {
+      // 優秀成功
+      if (actualMol > targetMol) {
+        return `${statusLine}\n素晴らしいネ！少し多めだけど、品質は申し分ないヨ！`;
+      } else {
+        return `${statusLine}\n良い出来だネ！少し少なめだけど、実用レベルヨ！`;
+      }
+      
+    } else if (bonusRate >= 0.3) {
+      // 及第点（失敗扱い）
+      if (unreactedRatio > 0.1) {
+        if (accuracyLevel === 'perfect' || accuracyLevel === 'excellent') {
+          return `${statusLine}\n生成量は良いけど、材料がもったいないネ！効率を上げるヨ！`;
+        } else {
+          return `${statusLine}\n量の誤差と未反応物、両方に問題があるネ...`;
+        }
+      } else {
+        return `${statusLine}\nレシピ比率は良いけど、精度が足りないヨ！mol計算を確認するネ！`;
+      }
+      
+    } else {
+      // 失敗
+      if (unreactedRatio > 0.2) {
+        return `${statusLine}\n未反応物が多すぎるヨ！材料の比率を見直すネ！`;
+      } else if (unreactedRatio > 0.1) {
+        if (accuracyLevel === 'poor') {
+          return `${statusLine}\n生成量も効率も両方ダメネ...基本から見直すヨ！`;
+        } else {
+          return `${statusLine}\n生成量は悪くないけど、効率が悪いから不合格ネ！`;
+        }
+      } else {
+        if (actualMol < targetMol * 0.5) {
+          if (unreactedRatio < 0.05) {
+            return `${statusLine}\nレシピ比率は完璧ネ！でも量が少なすぎるヨ！！`;
+          } else {
+            return `${statusLine}\n量が少なすぎるネ！化学量論比を正確に計算するヨ！`;
+          }
+        } else {
+          if (unreactedRatio < 0.05) {
+            return `${statusLine}\nレシピ比率は良いけど、目標量との差が大きいネ！`;
+          } else {
+            return `${statusLine}\n目標量との差が大きすぎるヨ！計算を見直すネ！`;
+          }
+        }
+      }
     }
   };
 
@@ -460,12 +615,6 @@ export default function GameScreen({
     }, 1500);
   };
 
-  const clearPotWithoutOrder = () => {
-    setPotContents({});
-    setMaterialCosts(0); // 材料費もリセット
-    resetPlate();
-  };
-
   const showReactionResult = (result: any) => {
     setLastResult(result);
     setReactionCompleted(true); // 反応ボタンを無効化
@@ -478,8 +627,8 @@ export default function GameScreen({
       const customerMultiplier = currentOrder.bonusMultiplier || 1.0;
       const orderBonus = Math.ceil(baseBonus * result.bonusRate * customerMultiplier);
       
-      // 成功時は材料費も返却
-      const materialRefund = result.bonusRate > 0 ? Math.ceil(materialCosts) : 0;
+      // パーフェクト・優秀時のみ材料費返却
+      const materialRefund = result.bonusRate >= 0.8 ? Math.ceil(materialCosts) : 0;
       moneyChange = orderBonus + materialRefund;
     }
     
@@ -542,24 +691,23 @@ export default function GameScreen({
       saveUserData(userData);
     }
     
-    // お客様の詳細な反応メッセージ
-    if (result.bonusRate > 0) {
-      if (result.code === 'REACTION_SUCCESS') {
-        if (result.bonusRate >= 1.0) {
-          feedbackMsg = '「完璧です！おいしい～！」';
-        } else if (result.bonusRate >= 0.8) {
-          feedbackMsg = '「良いですネ！少し量が違うけど...」';
-        } else if (result.bonusRate >= 0.5) {
-          feedbackMsg = '「まあまあですネ。」';
-        } else {
-          feedbackMsg = '「う～ん、微妙デス...」';
-        }
+    // お客様の詳細な反応メッセージ（新判定システム対応）
+    if (result.orderMatch) {
+      // 注文品が生成された場合
+      if (result.bonusRate >= 1.0) {
+        feedbackMsg = '「完璧です！おいしい～！」';
+      } else if (result.bonusRate >= 0.8) {
+        feedbackMsg = '「良いですネ！少し量が違うけど...」';
+      } else if (result.bonusRate >= 0.3) {
+        feedbackMsg = '「う～ん、量が足りないか効率が悪いですネ...」';
+      } else {
+        feedbackMsg = '「注文品はできてますが、量や効率に問題がありマス...」';
       }
       
       // 未反応物質がある場合の追加コメント
       if (unreacted.length > 0) {
         const unreactedList = unreacted.map(item => `${item.formula} ${formatNumber(item.amount)} mol`).join(', ');
-        feedbackMsg += `\n（${unreactedList} が残っています）`;
+        feedbackMsg += `\n（${unreactedList} が混入しています...）`;
       }
       
       // 報酬の内訳を表示
@@ -567,7 +715,7 @@ export default function GameScreen({
         const baseBonus = 1000;
         const customerMultiplier = currentOrder.bonusMultiplier || 1.0;
         const orderBonus = Math.ceil(baseBonus * result.bonusRate * customerMultiplier);
-        const materialRefund = result.bonusRate > 0 ? Math.ceil(materialCosts) : 0;
+        const materialRefund = result.bonusRate >= 0.8 ? Math.ceil(materialCosts) : 0;
         
         if (materialRefund > 0) {
           feedbackMsg += `\n注文報酬: +${orderBonus}円`;
@@ -580,16 +728,15 @@ export default function GameScreen({
         feedbackMsg += `\n+${moneyChange}円`;
       }
     } else {
+      // 注文品が全く生成されなかった場合
       if (result.code === 'NO_REACTION') {
         feedbackMsg = '「反応しませんネ...」';
         feedbackMsg += '\n（これらの物質は反応しません）';
-      } else if (result.code === 'REACTION_MISMATCH') {
+      } else {
         feedbackMsg = '「反応はしたけど、注文と違いマス...」';
         if (result.reaction) {
           feedbackMsg += `\n（${result.reaction.equation} の反応が起こりました）`;
         }
-      } else {
-        feedbackMsg = '「買えりマス。」';
       }
       
       // 失敗理由の詳細表示
@@ -794,11 +941,42 @@ export default function GameScreen({
                               <div className="text-sm text-gray-600">{formatNumber(leftMaterial[1])} mol</div>
                               <button 
                                 onClick={() => {
+                                  const removedFormula = leftMaterial[0];
+                                  const removedAmount = leftMaterial[1];
+                                  
+                                  // サルベージ機能
+                                  const salvageLevel = userData?.skills?.salvage || 0;
+                                  
+                                  if (salvageLevel === 0) {
+                                    toast.error('サルベージスキルがないため回収できません！\nスキルポイントを使ってサルベージスキルを習得してください。');
+                                    return;
+                                  }
+                                  
+                                  // サルベージ率の計算（レベルに応じて）
+                                  const salvageRates = [0, 0.3, 0.5, 0.7]; // Lv0:0%, Lv1:30%, Lv2:50%, Lv3:70%
+                                  const salvageRate = salvageRates[Math.min(salvageLevel, 3)];
+                                  
+                                  // 回収金額計算
+                                  const materialCost = removedAmount * 100; // 100円/mol
+                                  const recoveredAmount = Math.ceil(materialCost * salvageRate);
+                                  
+                                  // 材料をケミ鍋から削除
                                   setPotContents(prev => {
                                     const newContents = { ...prev };
-                                    delete newContents[leftMaterial[0]];
+                                    delete newContents[removedFormula];
                                     return newContents;
                                   });
+                                  
+                                  // 材料費記録を更新
+                                  setMaterialCosts(prev => Math.max(0, prev - materialCost));
+                                  
+                                  // サルベージ金額を返却
+                                  if (recoveredAmount > 0) {
+                                    updateMoney(recoveredAmount);
+                                    toast.success(`${getProductDisplayName(removedFormula)} ${formatNumber(removedAmount)} mol を回収しました！\nサルベージLv.${salvageLevel} (${(salvageRate * 100)}%): +${recoveredAmount}円`, {
+                                      duration: 3000
+                                    });
+                                  }
                                 }}
                                 className="mt-1 text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
                               >
@@ -823,11 +1001,42 @@ export default function GameScreen({
                               <div className="text-sm text-gray-600">{formatNumber(rightMaterial[1])} mol</div>
                               <button 
                                 onClick={() => {
+                                  const removedFormula = rightMaterial[0];
+                                  const removedAmount = rightMaterial[1];
+                                  
+                                  // サルベージ機能
+                                  const salvageLevel = userData?.skills?.salvage || 0;
+                                  
+                                  if (salvageLevel === 0) {
+                                    toast.error('サルベージスキルがないため回収できません！\nスキルポイントを使ってサルベージスキルを習得してください。');
+                                    return;
+                                  }
+                                  
+                                  // サルベージ率の計算（レベルに応じて）
+                                  const salvageRates = [0, 0.3, 0.5, 0.7]; // Lv0:0%, Lv1:30%, Lv2:50%, Lv3:70%
+                                  const salvageRate = salvageRates[Math.min(salvageLevel, 3)];
+                                  
+                                  // 回収金額計算
+                                  const materialCost = removedAmount * 100; // 100円/mol
+                                  const recoveredAmount = Math.ceil(materialCost * salvageRate);
+                                  
+                                  // 材料をケミ鍋から削除
                                   setPotContents(prev => {
                                     const newContents = { ...prev };
-                                    delete newContents[rightMaterial[0]];
+                                    delete newContents[removedFormula];
                                     return newContents;
                                   });
+                                  
+                                  // 材料費記録を更新
+                                  setMaterialCosts(prev => Math.max(0, prev - materialCost));
+                                  
+                                  // サルベージ金額を返却
+                                  if (recoveredAmount > 0) {
+                                    updateMoney(recoveredAmount);
+                                    toast.success(`${getProductDisplayName(removedFormula)} ${formatNumber(removedAmount)} mol を回収しました！\nサルベージLv.${salvageLevel} (${(salvageRate * 100)}%): +${recoveredAmount}円`, {
+                                      duration: 3000
+                                    });
+                                  }
                                 }}
                                 className="mt-1 text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
                               >
@@ -908,50 +1117,81 @@ export default function GameScreen({
 
             {/* 4. 給仕エリア（お皿） */}
             <section>
-              <div className="flex flex-col items-center justify-between bg-gray-100 rounded-xl h-[240px] p-3">
+              <div className="flex flex-col items-center justify-between bg-gray-100 rounded-xl h-[250px] p-3">
                 
                 {/* 上段: お皿とフィードバック */}
                 <div className="flex flex-row items-center justify-around w-full">
                   {/* お皿 */}
-                  <div className="bg-white rounded-full w-36 h-36 shadow-inner flex flex-col items-center justify-center text-gray-300 transition-all duration-300 p-2">
-                    <span className="text-4xl">🍽️</span>
+                  <div className="bg-white rounded-xl w-56 h-36 shadow-inner flex flex-col items-center justify-center text-gray-300 transition-all duration-300 p-3">
                     
-                    {/* メインの生成物 */}
+                    {/* 全ての生成物を横並び表示 */}
                     {plateProducts.length > 0 && (
-                      <div className="text-center mt-1">
-                        <span className="block text-lg font-bold text-gray-800">
-                          {plateProducts[0].formula}
-                        </span>
-                        <span className="block text-base text-gray-600">
-                          {formatNumber(plateProducts[0].amount)} mol
-                        </span>
+                      <div className="text-center w-full">
+                        <div className="flex flex-wrap justify-center gap-2 mb-2">
+                          {plateProducts.map((product, index) => (
+                            <div key={product.formula} className="text-center bg-gradient-to-b from-yellow-50 to-orange-50 rounded-md p-2 shadow-sm border border-yellow-200 min-w-0 flex-shrink-0">
+                              <span className="block text-sm font-bold text-orange-800 drop-shadow-sm">
+                                {product.formula}
+                              </span>
+                              <span className="block text-xs font-semibold text-amber-600">
+                                {formatNumber(product.amount)} mol
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                     
                     {/* 未反応物エリア */}
                     {plateUnreacted.length > 0 && (
-                      <div className="text-center mt-2 px-2">
-                        <span className="block text-xs text-gray-500">（未反応）</span>
-                        <span className="block text-sm font-semibold text-gray-700">
-                          {plateUnreacted[0].formula}
-                        </span>
-                        <span className="block text-sm text-gray-600">
-                          {formatNumber(plateUnreacted[0].amount)} mol
-                        </span>
+                      <div className="text-center w-full">
+                        <span className="block text-xs text-gray-500 mb-1">（未反応）</span>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {plateUnreacted.map((unreacted, index) => (
+                            <div key={unreacted.formula} className="text-center bg-gray-50 rounded-md p-1 min-w-0 flex-shrink-0">
+                              <span className="block text-xs font-semibold text-gray-700">
+                                {unreacted.formula}
+                              </span>
+                              <span className="block text-xs text-gray-500">
+                                {formatNumber(unreacted.amount)} mol
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 空の状態 */}
+                    {plateProducts.length === 0 && plateUnreacted.length === 0 && (
+                      <div className="text-center text-gray-400">
+                        <div className="text-6xl mb-2">🍽️</div>
+                        <div className="text-sm">お皿</div>
                       </div>
                     )}
                   </div>
 
                   {/* フィードバックエリア */}
-                  <div className="flex flex-col items-center justify-center w-64">
+                  <div className="flex flex-col items-center justify-center flex-1 max-w-md ml-4">
                     {customerFeedbackMsg && (
-                      <div className="text-center">
-                        <div className="whitespace-pre-line text-purple-700">
-                          {customerFeedbackMsg.split('\n').map((line, index) => (
-                            <div key={index} className={index === 0 ? 'text-lg font-bold mb-2' : 'text-base'}>
-                              {line}
-                            </div>
-                          ))}
+                      <div className="text-center w-full">
+                        <div className="whitespace-pre-line text-purple-700 leading-relaxed">
+                          {customerFeedbackMsg.split('\n').map((line, index) => {
+                            // 1行目に評価絵文字を追加
+                            if (index === 0) {
+                              const emoji = getEvaluationEmoji(line, lastResult?.bonusRate || 0);
+                              return (
+                                <div key={index} className="text-lg font-bold mb-2 break-keep">
+                                  <span className="text-2xl mr-2">{emoji}</span>
+                                  {line}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={index} className="text-sm mb-1 break-keep">
+                                {line}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
