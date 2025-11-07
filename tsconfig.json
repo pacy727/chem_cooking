@@ -42,7 +42,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     "app/**/*", // ← appディレクトリを明示的に含める
-    "lib/**/*"
+    "lib/**/*",
+    "out/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -10,8 +10,14 @@ import {
   SKILL_WORD_OF_MOUTH,
   SKILL_SALVAGE
 } from '../data/gameData';
+import { 
+  saveUserDataToFirestore, 
+  loadUserDataFromFirestore, 
+  checkUserExists,
+  generateUserId 
+} from '../firebase/utils';
 
-// ユーザーデータ管理
+// ユーザーデータ管理（Firebase対応）
 export function createDefaultUserData(storeName: string, chefName: string): UserData {
   return {
     storeName,
@@ -35,26 +41,105 @@ export function createDefaultUserData(storeName: string, chefName: string): User
   };
 }
 
-export function saveUserData(userData: UserData): void {
-  if (typeof window === 'undefined') return;
-  
-  userData.lastPlayed = new Date().toISOString();
-  const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
-  const key = `${userData.storeName}_${userData.chefName}`;
-  users[key] = userData;
-  localStorage.setItem('chemKitchenUsers', JSON.stringify(users));
+// Firebase対応のユーザーデータ保存
+export async function saveUserData(userData: UserData): Promise<void> {
+  try {
+    // Firebaseに保存
+    const userId = generateUserId(userData.storeName, userData.chefName);
+    await saveUserDataToFirestore(userId, userData);
+    
+    // ローカルストレージにもバックアップとして保存
+    if (typeof window !== 'undefined') {
+      const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
+      const key = `${userData.storeName}_${userData.chefName}`;
+      users[key] = userData;
+      localStorage.setItem('chemKitchenUsers', JSON.stringify(users));
+    }
+  } catch (error) {
+    console.error('Error saving user data:', error);
+    
+    // Firebaseエラー時はローカルストレージにフォールバック
+    if (typeof window !== 'undefined') {
+      userData.lastPlayed = new Date().toISOString();
+      const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
+      const key = `${userData.storeName}_${userData.chefName}`;
+      users[key] = userData;
+      localStorage.setItem('chemKitchenUsers', JSON.stringify(users));
+    }
+    
+    throw error;
+  }
 }
 
-export function loadUserData(storeName: string, chefName: string): UserData | null {
-  if (typeof window === 'undefined') return null;
-  
-  const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
-  const key = `${storeName}_${chefName}`;
-  return users[key] || null;
+// Firebase対応のユーザーデータ読み込み
+export async function loadUserData(storeName: string, chefName: string): Promise<UserData | null> {
+  try {
+    // まずFirebaseから読み込み
+    const userId = generateUserId(storeName, chefName);
+    const firebaseData = await loadUserDataFromFirestore(userId);
+    
+    if (firebaseData) {
+      return firebaseData;
+    }
+    
+    // Firebaseにデータがない場合、ローカルストレージから移行
+    if (typeof window !== 'undefined') {
+      const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
+      const key = `${storeName}_${chefName}`;
+      const localData = users[key];
+      
+      if (localData) {
+        // ローカルデータをFirebaseに移行
+        await saveUserDataToFirestore(userId, localData);
+        return localData;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    
+    // Firebaseエラー時はローカルストレージから読み込み
+    if (typeof window !== 'undefined') {
+      const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
+      const key = `${storeName}_${chefName}`;
+      return users[key] || null;
+    }
+    
+    return null;
+  }
 }
 
-export function userExists(storeName: string, chefName: string): boolean {
-  return loadUserData(storeName, chefName) !== null;
+// Firebase対応のユーザー存在確認
+export async function userExists(storeName: string, chefName: string): Promise<boolean> {
+  try {
+    // まずFirebaseで確認
+    const userId = generateUserId(storeName, chefName);
+    const exists = await checkUserExists(userId);
+    
+    if (exists) {
+      return true;
+    }
+    
+    // ローカルストレージも確認
+    if (typeof window !== 'undefined') {
+      const userData = await loadUserData(storeName, chefName);
+      return userData !== null;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking user existence:', error);
+    
+    // エラー時はローカルストレージで確認
+    if (typeof window !== 'undefined') {
+      const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
+      const key = `${storeName}_${chefName}`;
+      return !!users[key];
+    }
+    
+    return false;
+  }
 }
 
 // レベル・経験値管理
@@ -75,6 +160,10 @@ export function calculateLevelUp(userData: UserData, expGain: number): { leveled
   }
   
   userData.skillPoints += skillPointsGained;
+  
+  // ランク更新
+  userData.rank = calculateRank(userData.level, userData.totalSales);
+  
   return { leveledUp, newLevel: userData.level, skillPointsGained };
 }
 

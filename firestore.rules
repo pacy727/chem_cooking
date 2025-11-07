@@ -1,0 +1,28 @@
+// firestore.rules
+// セキュリティを考慮したFirestoreルール
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ユーザーデータ: 自分のデータのみアクセス可能
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // ランキングデータ: 認証済みユーザーは読み取りのみ可能
+    match /rankings/{document} {
+      allow read: if request.auth != null;
+      allow write: if false; // サーバー側でのみ更新
+    }
+    
+    // 公開統計データ: 認証済みユーザーは読み取りのみ可能
+    match /statistics/{document} {
+      allow read: if request.auth != null;
+      allow write: if false; // サーバー側でのみ更新
+    }
+    
+    // その他のドキュメントは拒否
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

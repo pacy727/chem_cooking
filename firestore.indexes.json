@@ -1,0 +1,34 @@
+{
+    "indexes": [
+      {
+        "collectionGroup": "rankings",
+        "queryScope": "COLLECTION",
+        "fields": [
+          {
+            "fieldPath": "money",
+            "order": "DESCENDING"
+          },
+          {
+            "fieldPath": "lastUpdated",
+            "order": "DESCENDING"
+          }
+        ]
+      },
+      {
+        "collectionGroup": "rankings",
+        "queryScope": "COLLECTION",
+        "fields": [
+          {
+            "fieldPath": "totalSales",
+            "order": "DESCENDING"
+          },
+          {
+            "fieldPath": "lastUpdated",
+            "order": "DESCENDING"
+          }
+        ]
+      }
+    ],
+    "fieldOverrides": []
+  }
+  

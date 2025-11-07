@@ -4,8 +4,10 @@
 import { useState, useEffect } from 'react';
 import { UserData } from '../../../lib/types';
 import { calculateRank, getExpForLevel, saveUserData } from '../../../lib/utils/gameUtils';
+import { getMoneyRanking, getSalesRanking, getGameStatistics } from '../../../lib/firebase/utils';
 import SkillModal from '../modals/SkillModal';
-import { Star } from 'lucide-react';
+import { Star, TrendingUp, Users, DollarSign } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface HomeScreenProps {
   userData: UserData;
@@ -14,10 +16,36 @@ interface HomeScreenProps {
   onUserDataUpdate: (userData: UserData) => void;
 }
 
+interface RankingItem {
+  rank: number;
+  storeName: string;
+  chefName: string;
+  money: number;
+  totalSales?: number;
+  level: number;
+}
+
+interface GameStats {
+  totalUsers: number;
+  totalMoney: number;
+  totalSales: number;
+  averageLevel: number;
+}
+
 export default function HomeScreen({ userData, onStartGame, onLogout, onUserDataUpdate }: HomeScreenProps) {
   const [showSkillModal, setShowSkillModal] = useState(false);
+  const [rankings, setRankings] = useState<RankingItem[]>([]);
+  const [salesRankings, setSalesRankings] = useState<RankingItem[]>([]);
+  const [gameStats, setGameStats] = useState<GameStats>({
+    totalUsers: 0,
+    totalMoney: 0,
+    totalSales: 0,
+    averageLevel: 1
+  });
+  const [rankingType, setRankingType] = useState<'money' | 'sales'>('money');
+  const [loading, setLoading] = useState(true);
 
-  // ランク情報
+  // ランキング情報
   const rankData = {
     'apprentice': { icon: '🍽️', name: '見習いシェフ', description: 'まだまだ修行が必要です' },
     'intermediate': { icon: '🥄', name: '一人前シェフ', description: '基本的な料理はお任せください' },
@@ -30,14 +58,80 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
   const expForNextLevel = getExpForLevel(userData.level);
   const expProgress = (userData.exp / expForNextLevel) * 100;
 
+  // 初期データ読み込み
+  useEffect(() => {
+    const loadRankingData = async () => {
+      try {
+        setLoading(true);
+        
+        // 並列でデータを取得
+        const [moneyRankings, salesRankingsData, stats] = await Promise.all([
+          getMoneyRanking(),
+          getSalesRanking(),
+          getGameStatistics()
+        ]);
+
+        setRankings(moneyRankings);
+        setSalesRankings(salesRankingsData);
+        setGameStats(stats);
+      } catch (error) {
+        console.error('Error loading ranking data:', error);
+        toast.error('ランキングデータの読み込みに失敗しました');
+        
+        // フォールバックデータ
+        setRankings([
+          { rank: 1, storeName: 'ラ・キミカ', chefName: 'シェフA', money: 15000, level: 12 },
+          { rank: 2, storeName: 'モル亭', chefName: 'シェフB', money: 12000, level: 10 },
+          { rank: 3, storeName: 'キッチンイオン', chefName: 'シェフC', money: 8000, level: 8 }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadRankingData();
+  }, []);
+
   const handleSkillUpdate = (updatedUserData: UserData) => {
     saveUserData(updatedUserData);
     onUserDataUpdate(updatedUserData);
   };
 
+  const handleRefreshRankings = async () => {
+    try {
+      setLoading(true);
+      const [moneyRankings, salesRankingsData, stats] = await Promise.all([
+        getMoneyRanking(),
+        getSalesRanking(),
+        getGameStatistics()
+      ]);
+
+      setRankings(moneyRankings);
+      setSalesRankings(salesRankingsData);
+      setGameStats(stats);
+      toast.success('ランキングを更新しました');
+    } catch (error) {
+      console.error('Error refreshing rankings:', error);
+      toast.error('ランキングの更新に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 現在のユーザーのランキング順位を取得
+  const getCurrentUserRank = () => {
+    const currentRankings = rankingType === 'money' ? rankings : salesRankings;
+    const userRank = currentRankings.findIndex(
+      r => r.storeName === userData.storeName && r.chefName === userData.chefName
+    );
+    return userRank >= 0 ? userRank + 1 : null;
+  };
+
+  const currentUserRank = getCurrentUserRank();
+
   return (
     <>
-      <div className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-xl">
+      <div className="max-w-6xl mx-auto p-8 bg-white rounded-2xl shadow-xl">
         <div className="flex justify-between items-center mb-6">
           <h1 className="font-lobster text-5xl font-bold text-yellow-600" style={{ fontFamily: 'Lobster, cursive' }}>
             {userData.storeName}
@@ -83,7 +177,7 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
           {/* 左：資本金とステータス */}
           <div className="md:col-span-1 space-y-4">
@@ -97,6 +191,15 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
               </p>
               {userData.rank === 'legend' && (
                 <p className="text-sm font-bold text-purple-600">★レジェンドボーナス x5 適用中★</p>
+              )}
+              
+              {/* 現在の順位表示 */}
+              {currentUserRank && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-700">
+                    現在の{rankingType === 'money' ? '資本金' : '売上'}ランキング: {currentUserRank}位
+                  </p>
+                </div>
               )}
             </div>
             
@@ -118,17 +221,132 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
                 </p>
               </div>
             </div>
+
+            {/* ゲーム統計 */}
+            <div className="bg-gray-50 p-4 rounded-lg shadow-md">
+              <h3 className="text-lg font-semibold text-gray-700 mb-3">ゲーム統計</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Users className="w-4 h-4" />
+                    総シェフ数:
+                  </span>
+                  <span className="font-bold">{gameStats.totalUsers.toLocaleString()}人</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <DollarSign className="w-4 h-4" />
+                    総資本金:
+                  </span>
+                  <span className="font-bold">¥{gameStats.totalMoney.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <TrendingUp className="w-4 h-4" />
+                    総売上:
+                  </span>
+                  <span className="font-bold">¥{gameStats.totalSales.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>平均レベル:</span>
+                  <span className="font-bold">Lv.{gameStats.averageLevel}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* 右：ランキング */}
-          <div className="md:col-span-1 bg-gray-50 p-4 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">ランキング (総売上)</h3>
-            <div className="space-y-2">
-              <p>🥇 1位: ラ・キミカ (¥15,000)</p>
-              <p>🥈 2位: モル亭 (¥12,000)</p>
-              <p>🥉 3位: キッチンイオン (¥8,000)</p>
-              <p className="text-xs text-gray-400 mt-4 text-center">（ランキング機能は開発中です）</p>
+          {/* 中央・右：ランキング */}
+          <div className="md:col-span-2 bg-gray-50 p-4 rounded-lg shadow-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-700">ランキング TOP30</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setRankingType('money')}
+                  className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
+                    rankingType === 'money'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  資本金
+                </button>
+                <button
+                  onClick={() => setRankingType('sales')}
+                  className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
+                    rankingType === 'sales'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  総売上
+                </button>
+                <button
+                  onClick={handleRefreshRankings}
+                  disabled={loading}
+                  className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm font-semibold hover:bg-purple-600 transition disabled:bg-gray-400"
+                >
+                  {loading ? '更新中...' : '更新'}
+                </button>
+              </div>
             </div>
+            
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                <p className="text-gray-500 mt-2">読み込み中...</p>
+              </div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto">
+                <div className="space-y-2">
+                  {(rankingType === 'money' ? rankings : salesRankings).map((ranking, index) => (
+                    <div 
+                      key={`${ranking.storeName}_${ranking.chefName}`}
+                      className={`flex items-center justify-between p-3 rounded-lg transition ${
+                        ranking.storeName === userData.storeName && ranking.chefName === userData.chefName
+                          ? 'bg-yellow-100 border-2 border-yellow-400'
+                          : 'bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                          index === 0 ? 'bg-yellow-400 text-white' :
+                          index === 1 ? 'bg-gray-400 text-white' :
+                          index === 2 ? 'bg-amber-600 text-white' :
+                          'bg-gray-200 text-gray-700'
+                        }`}>
+                          {ranking.rank}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-800">{ranking.storeName}</p>
+                          <p className="text-sm text-gray-600">シェフ: {ranking.chefName}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-800">
+                          {rankingType === 'money' 
+                            ? `¥${ranking.money.toLocaleString()}`
+                            : `¥${(ranking.totalSales || 0).toLocaleString()}`
+                          }
+                        </p>
+                        <p className="text-sm text-gray-600">Lv.{ranking.level}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {(rankingType === 'money' ? rankings : salesRankings).length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>ランキングデータがありません</p>
+                    <button 
+                      onClick={handleRefreshRankings}
+                      className="mt-2 text-blue-500 hover:text-blue-700 underline"
+                    >
+                      再読み込み
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
