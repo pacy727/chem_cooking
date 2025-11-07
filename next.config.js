@@ -8,7 +8,7 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
-  // 環境変数の設定
+  //環境変数の設定
   env: {
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,

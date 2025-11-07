@@ -10,30 +10,68 @@ import GameScreenComponent from "./components/screens/GameScreen";
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 
+// // Firebase初期化のエラーハンドリング
+// const initializeFirebase = async () => {
+//   try {
+//     // Firebase設定が正しいかチェック
+//     const requiredEnvs = [
+//       'NEXT_PUBLIC_FIREBASE_API_KEY',
+//       'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+//       'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+//       'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+//       'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+//       'NEXT_PUBLIC_FIREBASE_APP_ID'
+//     ];
+
+//     const missingEnvs = requiredEnvs.filter(env => !process.env[env]);
+    
+//     if (missingEnvs.length > 0) {
+//       console.warn('Firebase environment variables missing:', missingEnvs);
+//       toast.error('Firebase設定が不完全です。ローカルストレージモードで動作します。');
+//       return false;
+//     }
+
+//     // Firebase設定をインポート（動的インポートでエラーをキャッチ）
+//     await import('../lib/firebase/config');
+//     console.log('Firebase initialized successfully');
+//     return true;
+//   } catch (error) {
+//     console.error('Firebase initialization failed:', error);
+//     toast.error('Firebaseの初期化に失敗しました。ローカルストレージモードで動作します。');
+//     return false;
+//   }
+// };
+
 // Firebase初期化のエラーハンドリング
 const initializeFirebase = async () => {
   try {
-    // Firebase設定が正しいかチェック
-    const requiredEnvs = [
+    // 詳細なデバッグ情報
+    console.log('=== Environment Variables Debug ===');
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+    console.log('All process.env keys:', Object.keys(process.env));
+    
+    // 各環境変数の詳細チェック
+    const envVars = [
       'NEXT_PUBLIC_FIREBASE_API_KEY',
-      'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+      'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN', 
       'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
       'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
       'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
       'NEXT_PUBLIC_FIREBASE_APP_ID'
     ];
-
-    const missingEnvs = requiredEnvs.filter(env => !process.env[env]);
     
-    if (missingEnvs.length > 0) {
-      console.warn('Firebase environment variables missing:', missingEnvs);
-      toast.error('Firebase設定が不完全です。ローカルストレージモードで動作します。');
-      return false;
-    }
-
-    // Firebase設定をインポート（動的インポートでエラーをキャッチ）
-    await import('../lib/firebase/config');
-    console.log('Firebase initialized successfully');
+    envVars.forEach(envVar => {
+      const value = process.env[envVar];
+      console.log(`${envVar}:`, {
+        exists: !!value,
+        type: typeof value,
+        length: value ? value.length : 0,
+        firstChar: value ? value[0] : 'N/A',
+        lastChar: value ? value[value.length - 1] : 'N/A'
+      });
+    });
+    
+    console.log('=== End Debug ===');
     return true;
   } catch (error) {
     console.error('Firebase initialization failed:', error);
@@ -193,3 +231,9 @@ export default function ChemicalKitchenPage() {
     </div>
   );
 }
+
+console.log('Environment check:', {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? 'EXISTS' : 'MISSING',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? 'EXISTS' : 'MISSING',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? 'EXISTS' : 'MISSING'
+});
