@@ -1,23 +1,19 @@
 // firestore.rules
-// セキュリティを考慮したFirestoreルール
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ユーザーデータ: 自分のデータのみアクセス可能
+    // ★ usersコレクション: 読み取りは全員可能、書き込みは自分のみ
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // 全ユーザーが全員のデータを読み取り可能（ランキング表示のため）
+      allow read: if true;
+      
+      // 書き込みは自分のデータのみ
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // ランキングデータ: 認証済みユーザーは読み取りのみ可能
+    // ★ rankingsコレクションは廃止（削除または無効化）
     match /rankings/{document} {
-      allow read: if request.auth != null;
-      allow write: if false; // サーバー側でのみ更新
-    }
-    
-    // 公開統計データ: 認証済みユーザーは読み取りのみ可能
-    match /statistics/{document} {
-      allow read: if request.auth != null;
-      allow write: if false; // サーバー側でのみ更新
+      allow read, write: if false;
     }
     
     // その他のドキュメントは拒否

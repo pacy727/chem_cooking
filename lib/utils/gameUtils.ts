@@ -13,7 +13,7 @@ import {
 import { 
   saveUserDataToFirestore, 
   loadUserDataFromFirestore, 
-  checkUserExists,
+  checkUserExists as checkUserExistsFirebase,
   generateUserId 
 } from '../firebase/utils';
 
@@ -28,12 +28,12 @@ export function createDefaultUserData(storeName: string, chefName: string): User
     totalSales: 0,
     rank: 'apprentice',
     skills: {
-      cost_reduction: 0,        // 仕入れ上手
-      recipe_discount: 0,       // レシピ研究  
-      hospitality: 0,          // おもてなし
-      chef_personality: 0,     // シェフの人柄
-      word_of_mouth: 0,        // 口コミ評価
-      salvage: 0,              // サルベージ
+      cost_reduction: 0,
+      recipe_discount: 0,
+      hospitality: 0,
+      chef_personality: 0,
+      word_of_mouth: 0,
+      salvage: 0,
     },
     skillPoints: 0,
     achievements: [],
@@ -110,34 +110,22 @@ export async function loadUserData(storeName: string, chefName: string): Promise
   }
 }
 
-// Firebase対応のユーザー存在確認
+// ★ 修正: Firebase対応のユーザー存在確認（シンプル化）
 export async function userExists(storeName: string, chefName: string): Promise<boolean> {
   try {
-    // まずFirebaseで確認
+    // Firebaseで確認
     const userId = generateUserId(storeName, chefName);
-    const exists = await checkUserExists(userId);
+    const exists = await checkUserExistsFirebase(userId);
     
-    if (exists) {
-      return true;
-    }
+    // デバッグログ
+    console.log('userExists check:', { storeName, chefName, userId, exists });
     
-    // ローカルストレージも確認
-    if (typeof window !== 'undefined') {
-      const userData = await loadUserData(storeName, chefName);
-      return userData !== null;
-    }
-    
-    return false;
+    return exists;
   } catch (error) {
     console.error('Error checking user existence:', error);
     
-    // エラー時はローカルストレージで確認
-    if (typeof window !== 'undefined') {
-      const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
-      const key = `${storeName}_${chefName}`;
-      return !!users[key];
-    }
-    
+    // ★ エラー時でもfalseを返す（新規作成を許可）
+    // ローカルストレージはチェックしない
     return false;
   }
 }
@@ -186,25 +174,25 @@ export function calculateIngredientCost(formula: string, amount: number, userDat
     cost *= (1 - reductionRate);
   }
   
-  return Math.ceil(cost); // 切り上げで整数化
+  return Math.ceil(cost);
 }
 
 // レシピ購入費計算（スキル効果適用）
 export function calculateRecipeCost(userData: UserData | null): number {
-  if (!userData) return 500; // デフォルト価格
+  if (!userData) return 500;
   
   return SKILL_RECIPE_DISCOUNT[userData.skills.recipe_discount] || 500;
 }
 
 // 材料サルベージ判定（整数化）
 export function attemptSalvage(formula: string, amount: number, userData: UserData | null): { success: boolean; recoveredAmount: number } {
-  let recoveryRate = 0.5; // 基本50%
+  let recoveryRate = 0.5;
   
   if (userData) {
     recoveryRate = SKILL_SALVAGE[userData.skills.salvage] || 0;
   }
   
-  const success = recoveryRate > 0 && Math.random() < 0.7; // 70%の確率で回収判定
+  const success = recoveryRate > 0 && Math.random() < 0.7;
   const recoveredAmount = success ? Math.ceil(calculateIngredientCost(formula, amount, userData) * recoveryRate) : 0;
   
   return { success, recoveredAmount };
@@ -224,7 +212,7 @@ export function checkVipCustomer(userData: UserData | null): boolean {
   if (!userData) return false;
   
   const vipRate = SKILL_WORD_OF_MOUTH[userData.skills.word_of_mouth] || 1.0;
-  const baseVipChance = 0.03; // 基本3%
+  const baseVipChance = 0.03;
   
   return Math.random() < (baseVipChance * vipRate);
 }
@@ -326,8 +314,8 @@ export function calculateReaction(
         price *= (1 - reductionRate);
       }
       
-      if (salvageRate > 0 && Math.random() < 0.7) { // 70%の確率でサルベージ
-        totalCost += Math.ceil(price * used * salvageRate); // 切り上げで整数化
+      if (salvageRate > 0 && Math.random() < 0.7) {
+        totalCost += Math.ceil(price * used * salvageRate);
       }
     }
   }
@@ -382,7 +370,6 @@ export function calculateReaction(
 function handleSpecialReactions(potContents: Record<string, number>) {
   const extras: Array<{ name: string; mols: number }> = [];
   
-  // 鉄と塩酸の反応: Fe + 2HCl → FeCl₂ + H₂
   const fe = potContents['Fe'] || 0;
   const hcl = potContents['HCl'] || 0;
   
@@ -392,7 +379,6 @@ function handleSpecialReactions(potContents: Record<string, number>) {
     extras.push({ name: 'H₂ (水素ガス)', mols: mol });
   }
   
-  // カルシウムと塩酸の反応: Ca + 2HCl → CaCl₂ + H₂
   const ca = potContents['Ca'] || 0;
   
   if (ca > 0 && hcl > 0) {

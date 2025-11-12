@@ -54,7 +54,7 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
     'legend': { icon: '⭐', name: 'レジェンドシェフ', description: '伝説のシェフです！' }
   };
 
-  const currentRankData = rankData[userData.rank];
+  const currentRankData = rankData[userData.rank] || rankData['apprentice'];
   const expForNextLevel = getExpForLevel(userData.level);
   const expProgress = (userData.exp / expForNextLevel) * 100;
 
@@ -64,7 +64,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
       try {
         setLoading(true);
         
-        // 並列でデータを取得
         const [moneyRankings, salesRankingsData, stats] = await Promise.all([
           getMoneyRanking(),
           getSalesRanking(),
@@ -78,7 +77,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
         console.error('Error loading ranking data:', error);
         toast.error('ランキングデータの読み込みに失敗しました');
         
-        // フォールバックデータ
         setRankings([
           { rank: 1, storeName: 'ラ・キミカ', chefName: 'シェフA', money: 15000, level: 12 },
           { rank: 2, storeName: 'モル亭', chefName: 'シェフB', money: 12000, level: 10 },
@@ -118,7 +116,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
     }
   };
 
-  // 現在のユーザーのランキング順位を取得
   const getCurrentUserRank = () => {
     const currentRankings = rankingType === 'money' ? rankings : salesRankings;
     const userRank = currentRankings.findIndex(
@@ -161,7 +158,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
           })()}
         </p>
 
-        {/* スタートボタンとスキルボタン */}
         <div className="flex gap-4 mb-8">
           <button 
             onClick={onStartGame}
@@ -179,21 +175,33 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          {/* 左：資本金とステータス */}
           <div className="md:col-span-1 space-y-4">
-            {/* 資本金 */}
+            {/* ★ 資本金（マイナス対応版） */}
             <div className="bg-gray-50 p-4 rounded-lg shadow-md text-center">
               <h3 className="text-lg font-semibold text-gray-700 mb-2">資本金</h3>
-              <p className="text-3xl font-bold text-gray-800">¥{Math.floor(userData.money).toLocaleString()}</p>
+              
+              {/* ★ 色分け表示 */}
+              <p className={`text-3xl font-bold ${userData.money >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
+                ¥{Math.floor(userData.money).toLocaleString()}
+              </p>
+              
               <p className="text-sm text-gray-500 mt-2">
                 ランク: <span className="text-lg">{currentRankData.icon}</span> 
                 (総売上: <span className="font-bold">¥{Math.floor(userData.totalSales).toLocaleString()}</span>)
               </p>
+              
               {userData.rank === 'legend' && (
                 <p className="text-sm font-bold text-purple-600">★レジェンドボーナス x5 適用中★</p>
               )}
               
-              {/* 現在の順位表示 */}
+              {/* ★ マイナス時の警告表示 */}
+              {userData.money < 0 && (
+                <div className="bg-red-100 border-2 border-red-500 rounded-lg p-3 mt-2">
+                  <p className="text-red-800 font-bold">⚠️ 赤字経営中！</p>
+                  <p className="text-sm text-red-600">黒字化を目指しましょう</p>
+                </div>
+              )}
+              
               {currentUserRank && (
                 <div className="mt-2 p-2 bg-blue-50 rounded-lg">
                   <p className="text-sm font-semibold text-blue-700">
@@ -203,7 +211,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
               )}
             </div>
             
-            {/* シェフステータス */}
             <div className="bg-gray-50 p-4 rounded-lg shadow-md">
               <h3 className="text-lg font-semibold text-gray-700 mb-3">シェフ ステータス</h3>
               <div className="space-y-2">
@@ -222,7 +229,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
               </div>
             </div>
 
-            {/* ゲーム統計 */}
             <div className="bg-gray-50 p-4 rounded-lg shadow-md">
               <h3 className="text-lg font-semibold text-gray-700 mb-3">ゲーム統計</h3>
               <div className="space-y-2 text-sm">
@@ -255,7 +261,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
             </div>
           </div>
 
-          {/* 中央・右：ランキング */}
           <div className="md:col-span-2 bg-gray-50 p-4 rounded-lg shadow-md">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-700">ランキング TOP30</h3>
@@ -352,7 +357,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
         </div>
       </div>
 
-      {/* スキルモーダル */}
       <SkillModal 
         isOpen={showSkillModal}
         onClose={() => setShowSkillModal(false)}

@@ -524,11 +524,23 @@ export default function GameScreen({
     const molAmount = convertToMol(amount, unit, formula);
     const cost = Math.ceil(molAmount * 100); // 100円/mol、切り上げ
     
-    if (money < cost) {
-      toast.error('お金が足りません！');
+    // if (money < cost) {
+    //   toast.error('お金が足りません！');
+    //   return;
+    // }
+    // マイナスになる場合は警告を表示
+    if (money - cost < 0) {
+      toast('⚠️ 赤字になります！', {
+        icon: '💸',
+        duration: 2000
+      });
+    }
+
+    // あまりにも大きなマイナスは防ぐ
+    if (money - cost < -100000) {
+      toast.error('これ以上の赤字は許可されていません！\n（上限: -10万円まで）');
       return;
     }
-    
     updateMoney(-cost);
     setMaterialCosts(prev => prev + cost); // 材料費を記録
     setPotContents(prev => ({
@@ -622,13 +634,17 @@ export default function GameScreen({
     let feedbackMsg = '';
     let moneyChange = 0;
     
+    // ★ 報酬計算を1回だけ行う（関数の最初で計算）
+    let orderBonus = 0;
+    let materialRefund = 0;
+    
     if (currentOrder) {
       const baseBonus = 1000;
       const customerMultiplier = currentOrder.bonusMultiplier || 1.0;
-      const orderBonus = Math.ceil(baseBonus * result.bonusRate * customerMultiplier);
+      orderBonus = Math.ceil(baseBonus * result.bonusRate * customerMultiplier);
       
       // パーフェクト・優秀時のみ材料費返却
-      const materialRefund = result.bonusRate >= 0.8 ? Math.ceil(materialCosts) : 0;
+      materialRefund = result.bonusRate >= 0.8 ? Math.ceil(materialCosts) : 0;
       moneyChange = orderBonus + materialRefund;
     }
     
@@ -710,22 +726,13 @@ export default function GameScreen({
         feedbackMsg += `\n（${unreactedList} が混入しています...）`;
       }
       
-      // 報酬の内訳を表示
-      if (currentOrder) {
-        const baseBonus = 1000;
-        const customerMultiplier = currentOrder.bonusMultiplier || 1.0;
-        const orderBonus = Math.ceil(baseBonus * result.bonusRate * customerMultiplier);
-        const materialRefund = result.bonusRate >= 0.8 ? Math.ceil(materialCosts) : 0;
-        
-        if (materialRefund > 0) {
-          feedbackMsg += `\n注文報酬: +${orderBonus}円`;
-          feedbackMsg += `\n材料費返却: +${materialRefund}円`;
-          feedbackMsg += `\n合計: +${moneyChange}円`;
-        } else {
-          feedbackMsg += `\n+${moneyChange}円`;
-        }
+      // ★ 報酬の内訳を表示（計算済みの値を使用）
+      if (materialRefund > 0) {
+        feedbackMsg += `\n注文報酬: +${orderBonus.toLocaleString()}円`;
+        feedbackMsg += `\n材料費返却: +${materialRefund.toLocaleString()}円`;
+        feedbackMsg += `\n合計: +${moneyChange.toLocaleString()}円`;
       } else {
-        feedbackMsg += `\n+${moneyChange}円`;
+        feedbackMsg += `\n+${moneyChange.toLocaleString()}円`;
       }
     } else {
       // 注文品が全く生成されなかった場合

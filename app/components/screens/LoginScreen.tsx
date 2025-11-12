@@ -17,37 +17,82 @@ export default function LoginScreen({ onLogin, onGuestLogin }: LoginScreenProps)
   const [chefName, setChefName] = useState('');
   const [showAccountModal, setShowAccountModal] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!storeName.trim() || !chefName.trim()) {
       toast.error('店名とお名前を入力してください。');
       return;
     }
 
-    const userData = loadUserData(storeName.trim(), chefName.trim());
-    if (!userData) {
-      toast.error('アカウントが見つかりません。アカウント作成をしてください。');
-      return;
-    }
+    try {
+      console.log('=== ログイン試行 ===');
+      console.log('店名:', storeName.trim());
+      console.log('シェフ名:', chefName.trim());
 
-    onLogin(userData);
-    toast.success(`${userData.chefName}シェフ、おかえりなさい！`);
+      const userData = await loadUserData(storeName.trim(), chefName.trim());
+      
+      console.log('読み込んだユーザーデータ:', userData);
+
+      if (!userData) {
+        toast.error('アカウントが見つかりません。アカウント作成をしてください。');
+        return;
+      }
+
+      // ★ データの整合性チェック
+      if (typeof userData.money !== 'number' || isNaN(userData.money)) {
+        console.error('不正なmoneyデータ:', userData.money);
+        userData.money = 5000; // デフォルト値
+      }
+
+      if (!userData.storeName || !userData.chefName) {
+        console.error('不正なユーザー名データ:', { storeName: userData.storeName, chefName: userData.chefName });
+        userData.storeName = storeName.trim();
+        userData.chefName = chefName.trim();
+      }
+
+      console.log('修正後のユーザーデータ:', userData);
+
+      onLogin(userData);
+      toast.success(`${userData.chefName}シェフ、おかえりなさい！`);
+    } catch (error) {
+      console.error('ログインエラー:', error);
+      toast.error('ログインに失敗しました。もう一度お試しください。');
+    }
   };
 
-  const handleCreateAccount = (newStoreName: string, newChefName: string) => {
+  const handleCreateAccount = async (newStoreName: string, newChefName: string) => {
     if (!newStoreName.trim() || !newChefName.trim()) {
       toast.error('店名とお名前を入力してください。');
       return;
     }
 
-    if (userExists(newStoreName.trim(), newChefName.trim())) {
-      toast.error('このアカウントは既に存在します。ログインしてください。');
-      return;
-    }
+    try {
+      console.log('=== アカウント作成試行 ===');
+      console.log('店名:', newStoreName.trim());
+      console.log('シェフ名:', newChefName.trim());
 
-    const userData = createDefaultUserData(newStoreName.trim(), newChefName.trim());
-    saveUserData(userData);
-    toast.success('アカウントが作成されました！ログインしてください。');
-    setShowAccountModal(false);
+      const exists = await userExists(newStoreName.trim(), newChefName.trim());
+      
+      console.log('ユーザー存在チェック:', exists);
+
+      if (exists) {
+        toast.error('このアカウントは既に存在します。ログインしてください。');
+        return;
+      }
+
+      const userData = createDefaultUserData(newStoreName.trim(), newChefName.trim());
+      
+      console.log('作成したユーザーデータ:', userData);
+
+      await saveUserData(userData);
+      
+      console.log('保存成功');
+
+      toast.success('アカウントが作成されました！ログインしてください。');
+      setShowAccountModal(false);
+    } catch (error) {
+      console.error('アカウント作成エラー:', error);
+      toast.error('アカウント作成に失敗しました。もう一度お試しください。');
+    }
   };
 
   return (
