@@ -627,6 +627,7 @@ export default function GameScreen({
     }, 1500);
   };
 
+  
   const showReactionResult = (result: any) => {
     setLastResult(result);
     setReactionCompleted(true); // 反応ボタンを無効化
