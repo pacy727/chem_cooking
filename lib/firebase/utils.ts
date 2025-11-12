@@ -8,6 +8,7 @@ import {
   query, 
   orderBy, 
   limit,
+  where,  // ← これを追加
   serverTimestamp,
   QueryDocumentSnapshot,
   DocumentData
@@ -177,6 +178,29 @@ export async function getGameStatistics(): Promise<GameStatistics> {
       totalSales: 0,
       averageLevel: 1
     };
+  }
+}
+
+// Store名の重複チェック関数を追加
+export async function checkStoreNameExists(storeName: string): Promise<boolean> {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(
+      usersRef,
+      where('storeName', '==', storeName),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return !querySnapshot.empty;
+  } catch (error) {
+    console.error('Error checking store name existence:', error);
+    // エラー時はローカルストレージで確認
+    if (typeof window !== 'undefined') {
+      const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
+      return Object.values(users).some((user: any) => user.storeName === storeName);
+    }
+    return false;
   }
 }
 

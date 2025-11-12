@@ -14,8 +14,32 @@ import {
   saveUserDataToFirestore, 
   loadUserDataFromFirestore, 
   checkUserExists as checkUserExistsFirebase,
+  checkStoreNameExists as checkStoreNameExistsFirebase,  // ← 追加
   generateUserId 
 } from '../firebase/utils';
+
+// 関数を追加
+export async function checkStoreNameExists(storeName: string): Promise<boolean> {
+  try {
+    // Firebaseで確認
+    const exists = await checkStoreNameExistsFirebase(storeName);
+    
+    if (exists) {
+      return true;
+    }
+    
+    // ローカルストレージでも確認（バックアップ）
+    if (typeof window !== 'undefined') {
+      const users = JSON.parse(localStorage.getItem('chemKitchenUsers') || '{}');
+      return Object.values(users).some((user: any) => user.storeName === storeName);
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking store name existence:', error);
+    return false;
+  }
+}
 
 // ユーザーデータ管理（Firebase対応）
 export function createDefaultUserData(storeName: string, chefName: string): UserData {

@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { UserData } from '../../../lib/types';
-import { loadUserData, createDefaultUserData, saveUserData, userExists } from '../../../lib/utils/gameUtils';
+import { loadUserData, createDefaultUserData, saveUserData, userExists, checkStoreNameExists } from '../../../lib/utils/gameUtils';  // ★ checkStoreNameExists を追加
 import AccountModal from '../modals/AccountModal';
 import toast from 'react-hot-toast';
 
@@ -59,41 +59,51 @@ export default function LoginScreen({ onLogin, onGuestLogin }: LoginScreenProps)
     }
   };
 
-  const handleCreateAccount = async (newStoreName: string, newChefName: string) => {
-    if (!newStoreName.trim() || !newChefName.trim()) {
-      toast.error('店名とお名前を入力してください。');
+// 【変更前の関数全体を削除して、以下に置き換え】
+
+const handleCreateAccount = async (newStoreName: string, newChefName: string) => {
+  if (!newStoreName.trim() || !newChefName.trim()) {
+    toast.error('店名とお名前を入力してください。');
+    return;
+  }
+
+  try {
+    console.log('=== アカウント作成試行 ===');
+    console.log('店名:', newStoreName.trim());
+    console.log('シェフ名:', newChefName.trim());
+
+    // ★★★ Store名の重複チェックを追加 ★★★
+    const storeExists = await checkStoreNameExists(newStoreName.trim());
+    
+    if (storeExists) {
+      toast.error('この店名は既に使用されています。\n別の店名を選んでください。');
       return;
     }
 
-    try {
-      console.log('=== アカウント作成試行 ===');
-      console.log('店名:', newStoreName.trim());
-      console.log('シェフ名:', newChefName.trim());
+    const exists = await userExists(newStoreName.trim(), newChefName.trim());
+    
+    console.log('ユーザー存在チェック:', exists);
 
-      const exists = await userExists(newStoreName.trim(), newChefName.trim());
-      
-      console.log('ユーザー存在チェック:', exists);
-
-      if (exists) {
-        toast.error('このアカウントは既に存在します。ログインしてください。');
-        return;
-      }
-
-      const userData = createDefaultUserData(newStoreName.trim(), newChefName.trim());
-      
-      console.log('作成したユーザーデータ:', userData);
-
-      await saveUserData(userData);
-      
-      console.log('保存成功');
-
-      toast.success('アカウントが作成されました！ログインしてください。');
-      setShowAccountModal(false);
-    } catch (error) {
-      console.error('アカウント作成エラー:', error);
-      toast.error('アカウント作成に失敗しました。もう一度お試しください。');
+    if (exists) {
+      toast.error('このアカウントは既に存在します。ログインしてください。');
+      return;
     }
-  };
+
+    const userData = createDefaultUserData(newStoreName.trim(), newChefName.trim());
+    
+    console.log('作成したユーザーデータ:', userData);
+
+    await saveUserData(userData);
+    
+    console.log('保存成功');
+
+    toast.success('アカウントが作成されました！ログインしてください。');
+    setShowAccountModal(false);
+  } catch (error) {
+    console.error('アカウント作成エラー:', error);
+    toast.error('アカウント作成に失敗しました。もう一度お試しください。');
+  }
+};
 
   return (
     <>
