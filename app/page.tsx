@@ -120,9 +120,9 @@ export default function ChemicalKitchenPage() {
     setCurrentScreen('home');
     
     if (firebaseReady) {
-      toast.success(`${userData.chefName}シェフ、おかえりなさい！ (Firebase同期済み)`);
+      toast.success(`おかえりなさい！ (Firebase同期済み)`);
     } else {
-      toast.success(`${userData.chefName}シェフ、おかえりなさい！ (ローカルモード)`);
+      toast.success(`おかえりなさい！ (ローカルモード)`);
     }
   };
 

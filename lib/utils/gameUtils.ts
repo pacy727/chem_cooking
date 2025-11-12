@@ -143,7 +143,7 @@ export function calculateLevelUp(userData: UserData, expGain: number): { leveled
   while (userData.exp >= getExpForLevel(userData.level)) {
     userData.exp -= getExpForLevel(userData.level);
     userData.level++;
-    skillPointsGained += 2;
+    skillPointsGained += 1;
     leveledUp = true;
   }
   

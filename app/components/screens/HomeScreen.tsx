@@ -19,7 +19,6 @@ interface HomeScreenProps {
 interface RankingItem {
   rank: number;
   storeName: string;
-  chefName: string;
   money: number;
   totalSales?: number;
   level: number;
@@ -78,9 +77,9 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
         toast.error('ランキングデータの読み込みに失敗しました');
         
         setRankings([
-          { rank: 1, storeName: 'ラ・キミカ', chefName: 'シェフA', money: 15000, level: 12 },
-          { rank: 2, storeName: 'モル亭', chefName: 'シェフB', money: 12000, level: 10 },
-          { rank: 3, storeName: 'キッチンイオン', chefName: 'シェフC', money: 8000, level: 8 }
+          { rank: 1, storeName: 'ラ・キミカ', money: 15000, level: 12 },
+          { rank: 2, storeName: 'モル亭', money: 12000, level: 10 },
+          { rank: 3, storeName: 'キッチンイオン', money: 8000, level: 8 }
         ]);
       } finally {
         setLoading(false);
@@ -119,7 +118,7 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
   const getCurrentUserRank = () => {
     const currentRankings = rankingType === 'money' ? rankings : salesRankings;
     const userRank = currentRankings.findIndex(
-      r => r.storeName === userData.storeName && r.chefName === userData.chefName
+      r => r.storeName === userData.storeName
     );
     return userRank >= 0 ? userRank + 1 : null;
   };
@@ -142,8 +141,8 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
         </div>
         
         <p className="text-xl text-gray-700 mb-6">
-          ようこそ、<span className="font-bold">{userData.chefName}</span> シェフ！ 
-          {(() => {
+        ようこそ、シェフ！
+        {(() => {
             const greetings = [
               "今日もお客様の笑顔のために☺",
               "素晴らしい一日になりそうですね✨",
@@ -304,10 +303,9 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
               <div className="max-h-96 overflow-y-auto">
                 <div className="space-y-2">
                   {(rankingType === 'money' ? rankings : salesRankings).map((ranking, index) => (
-                    <div 
-                      key={`${ranking.storeName}_${ranking.chefName}`}
+                    <div key={`${ranking.storeName}_${ranking.rank}`}
                       className={`flex items-center justify-between p-3 rounded-lg transition ${
-                        ranking.storeName === userData.storeName && ranking.chefName === userData.chefName
+                        ranking.storeName === userData.storeName
                           ? 'bg-yellow-100 border-2 border-yellow-400'
                           : 'bg-white hover:bg-gray-50'
                       }`}
@@ -323,7 +321,6 @@ export default function HomeScreen({ userData, onStartGame, onLogout, onUserData
                         </div>
                         <div>
                           <p className="font-semibold text-gray-800">{ranking.storeName}</p>
-                          <p className="text-sm text-gray-600">シェフ: {ranking.chefName}</p>
                         </div>
                       </div>
                       <div className="text-right">

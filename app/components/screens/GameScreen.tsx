@@ -21,6 +21,7 @@ import Pantry from '../game/Pantry';
 import ChemiPot from '../game/ChemiPot';
 import { Star, Home, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
+import JudgementModal from '../modals/JudgementModal';
 
   // 評価絵文字を決定する関数
   const getEvaluationEmoji = (message: string, bonusRate: number) => {
@@ -82,10 +83,16 @@ export default function GameScreen({
   const [showChefCommentModal, setShowChefCommentModal] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<{ formula: string; ingredient: any } | null>(null);
 
+  const [showJudgementModal, setShowJudgementModal] = useState(false);
+  const [judgementData, setJudgementData] = useState<{ bonusRate: number; orderMatch: boolean } | null>(null);  
+
   // お皿表示状態（統合版）
   const [plateProducts, setPlateProducts] = useState<Array<{ name: string; amount: number; formula: string }>>([]);
   const [plateUnreacted, setPlateUnreacted] = useState<Array<{ name: string; amount: number; formula: string }>>([]);
   const [customerFeedbackMsg, setCustomerFeedbackMsg] = useState('');
+
+ // ★★★ ここに追加 ★★★
+ const [orderHistory, setOrderHistory] = useState<string[]>([]); // 過去5問の生成物履歴
 
   // 初期化
   useEffect(() => {
@@ -118,35 +125,58 @@ export default function GameScreen({
   const generateOrder = () => {
     // ユーザーレベルに基づいて注文を生成
     const userLevel = userData?.level || 1;
-    const order = generateLevelBasedOrder(userLevel, userData); // userDataも渡す
+    
+    // 履歴に含まれない注文を生成（最大10回試行）
+    let order: LevelBasedOrder;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    do {
+      order = generateLevelBasedOrder(userLevel, userData);
+      attempts++;
+    } while (
+      orderHistory.includes(order.targetProduct) && 
+      attempts < maxAttempts
+    );
     
     // 水溶液の濃度をランダム生成
     setCurrentConcentrations(generateConcentrations());
     
-    // VIP客来店判定（口コミ評価スキル）
+    // VIP客来店判定（口コミ評価スキル）- レベル10以上のみ
     let isLegend = false;
+    let finalBonusMultiplier = order.bonusMultiplier; // 元の倍率を保持
+    
     if (userData && userData.level >= 10) {
       isLegend = checkVipCustomer(userData);
+      if (isLegend) {
+        finalBonusMultiplier = 5.0; // VIP客の場合のみ5倍に上書き
+      }
     }
     
-    // 基本ボーナスにVIPボーナスを適用
-    const bonusMultiplier = isLegend ? 5.0 : 1.0;
     const enhancedOrder: LevelBasedOrder = {
       ...order,
-      bonusMultiplier,
+      bonusMultiplier: finalBonusMultiplier,
       isLegend
     };
     
     setCurrentOrder(enhancedOrder);
-    setCurrentRecipe(order.reaction as any); // 反応データをレシピとして使用（型キャスト）
+    setCurrentRecipe(order.reaction as any);
     setShowRecipeHint(false);
-    setReactionCompleted(false); // 反応ボタンを再有効化
+    setReactionCompleted(false);
+    
+    // 履歴を更新（最新5件を保持）
+    setOrderHistory(prev => {
+      const newHistory = [order.targetProduct, ...prev];
+      return newHistory.slice(0, 5); // 最新5件のみ保持
+    });
     
     // デバッグ用：客タイプと倍率を確認
     const wordOfMouthLevel = userData?.skills?.word_of_mouth || 0;
     const vipMultipliers = [1.0, 1.5, 2.0, 3.0];
     const vipMultiplier = vipMultipliers[Math.min(wordOfMouthLevel, 3)];
-    console.log(`注文生成: ${order.customerType} - mol倍率: ${CUSTOMER_TYPES[order.customerType].molMultiplier}, ボーナス倍率: ${CUSTOMER_TYPES[order.customerType].bonusMultiplier}, 口コミ評価Lv${wordOfMouthLevel}(VIP確率×${vipMultiplier})`);
+    console.log(`注文生成: ${order.customerType} - mol倍率: ${CUSTOMER_TYPES[order.customerType].molMultiplier}, ボーナス倍率: ${finalBonusMultiplier}, 口コミ評価Lv${wordOfMouthLevel}(VIP確率×${vipMultiplier}), isLegend: ${isLegend}`);
+    console.log(`注文履歴（過去5問）: [${orderHistory.join(', ')}]`);
+    
     resetPlate();
   };
 
@@ -622,12 +652,21 @@ export default function GameScreen({
         }
       }
       
-      showReactionResult(result);
+      // 判定モーダルを表示
+      setJudgementData({
+        bonusRate: result.bonusRate,
+        orderMatch: result.orderMatch ?? false
+      });
+      setShowJudgementModal(true);
+      
+      // 結果データを保存（モーダル終了後に使用）
+      setLastResult(result);
+      
       setIsProcessing(false);
     }, 1500);
   };
 
-  
+
   const showReactionResult = (result: any) => {
     setLastResult(result);
     setReactionCompleted(true); // 反応ボタンを無効化
@@ -848,6 +887,16 @@ export default function GameScreen({
   const retry = () => {
     clearPot();
     resetPlate();
+  };
+
+  // ★★★ ここに追加 ★★★
+  const handleJudgementComplete = () => {
+    setShowJudgementModal(false);
+    
+    // モーダル終了後に結果を表示
+    if (lastResult) {
+      showReactionResult(lastResult);
+    }
   };
 
   const handleSkillUpdate = (updatedUserData: UserData) => {
@@ -1259,6 +1308,17 @@ export default function GameScreen({
         lastResult={lastResult}
         currentRecipe={currentRecipe}
       />
+
+            {/* ★★★ ここに追加 ★★★ */}
+            {judgementData && (
+        <JudgementModal 
+          isOpen={showJudgementModal}
+          bonusRate={judgementData.bonusRate}
+          orderMatch={judgementData.orderMatch}
+          onComplete={handleJudgementComplete}
+        />
+      )}
+
     </>
   );
 }

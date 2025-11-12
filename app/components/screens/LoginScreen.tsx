@@ -52,8 +52,8 @@ export default function LoginScreen({ onLogin, onGuestLogin }: LoginScreenProps)
       console.log('修正後のユーザーデータ:', userData);
 
       onLogin(userData);
-      toast.success(`${userData.chefName}シェフ、おかえりなさい！`);
-    } catch (error) {
+      toast.success(`おかえりなさい！`);
+      } catch (error) {
       console.error('ログインエラー:', error);
       toast.error('ログインに失敗しました。もう一度お試しください。');
     }

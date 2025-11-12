@@ -19,7 +19,6 @@ import { UserData } from '../types';
 interface RankingItem {
   rank: number;
   storeName: string;
-  chefName: string;
   money: number;
   totalSales: number;
   level: number;
@@ -101,7 +100,6 @@ export async function getMoneyRanking(): Promise<RankingItem[]> {
       rankings.push({
         rank: rankings.length + 1,
         storeName: data.storeName || '',
-        chefName: data.chefName || '',
         money: data.money || 0,
         totalSales: data.totalSales || 0,
         level: data.level || 1
@@ -133,7 +131,6 @@ export async function getSalesRanking(): Promise<RankingItem[]> {
       rankings.push({
         rank: rankings.length + 1,
         storeName: data.storeName || '',
-        chefName: data.chefName || '',
         money: data.money || 0,
         totalSales: data.totalSales || 0,
         level: data.level || 1

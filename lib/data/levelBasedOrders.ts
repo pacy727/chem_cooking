@@ -609,7 +609,6 @@ CHEMICAL_REACTIONS.forEach(reaction => {
   });
 });
 
-// レベルに応じた注文を生成
 export function generateLevelBasedOrder(userLevel: number, userData?: any): LevelBasedOrder {
   let availableOrders: any[] = [];
   
@@ -647,7 +646,8 @@ export function generateLevelBasedOrder(userLevel: number, userData?: any): Leve
     reactionId: selectedOrder.reactionId,
     targetProduct: selectedOrder.targetProduct,
     targetMol,
-    orderText: `${selectedOrder.orderText} (${targetMol} mol)`,
+    // ★★★ ここを修正 ★★★
+    orderText: `${selectedOrder.targetProduct}を作ってください (${targetMol} mol)`,  // 化学式を使用
     specialInstruction: selectedOrder.specialInstruction,
     reaction: selectedOrder.reaction,
     customerType,
