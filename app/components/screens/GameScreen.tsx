@@ -916,10 +916,10 @@ export default function GameScreen({
             onClick={onReturnHome}
             className="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition"
           >
-            ホームへ戻る
+            休憩いただきます
           </button>
-          <h1 className="text-2xl font-bold text-yellow-600 hidden md:block">
-            化学反応キッチン
+          <h1 className="font-lobster text-2xl font-bold text-yellow-600 hidden md:block">
+          Let's enjoy cooking
           </h1>
           
           <div className="flex items-center gap-3">
