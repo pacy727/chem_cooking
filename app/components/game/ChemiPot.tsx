@@ -16,12 +16,13 @@ interface ChemiPotProps {
   onSalvage: (formula: string) => void;
   userData: UserData | null;
   isProcessing: boolean;
+  reactionCompleted: boolean;  // ← 追加
 }
 
-export default function ChemiPot({ contents, onSalvage, userData, isProcessing }: ChemiPotProps) {
+export default function ChemiPot({ contents, onSalvage, userData, isProcessing,reactionCompleted }: ChemiPotProps) {
   const handleSalvage = (formula: string) => {
-    if (isProcessing) {
-      toast.error('調理中は回収できません！');
+    if (isProcessing|| reactionCompleted) {
+      toast.error('調理中または調理完了後は回収できません！');
       return;
     }
 
@@ -99,9 +100,9 @@ export default function ChemiPot({ contents, onSalvage, userData, isProcessing }
                   </div>
                   <button
                     onClick={() => handleSalvage(itemsArray[0][0])}
-                    disabled={isProcessing}
+                    disabled={isProcessing || reactionCompleted}  // ← reactionCompleted を追加
                     className={`text-xs font-semibold px-1 py-0.5 rounded mt-1 transition ${
-                      isProcessing 
+                      isProcessing || reactionCompleted  // ← ここにも追加
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                         : 'bg-red-100 text-red-500 hover:bg-red-500 hover:text-white'
                     }`}
@@ -131,9 +132,9 @@ export default function ChemiPot({ contents, onSalvage, userData, isProcessing }
                   </div>
                   <button
                     onClick={() => handleSalvage(itemsArray[1][0])}
-                    disabled={isProcessing}
+                    disabled={isProcessing || reactionCompleted}  // ← reactionCompleted を追加
                     className={`text-xs font-semibold px-1 py-0.5 rounded mt-1 transition ${
-                      isProcessing 
+                      isProcessing || reactionCompleted  // ← ここにも追加
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                         : 'bg-red-100 text-red-500 hover:bg-red-500 hover:text-white'
                     }`}

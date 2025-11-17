@@ -1035,7 +1035,12 @@ export default function GameScreen({
                                     });
                                   }
                                 }}
-                                className="mt-1 text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
+                                disabled={isProcessing || reactionCompleted}  // ← ここに reactionCompleted を追加
+                                className={`mt-1 text-xs px-2 py-1 rounded transition ${
+                                  isProcessing || reactionCompleted  // ← ここにも追加
+                                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                                    : 'bg-red-500 text-white hover:bg-red-600'
+                                }`}
                               >
                                 回収
                               </button>
@@ -1095,7 +1100,12 @@ export default function GameScreen({
                                     });
                                   }
                                 }}
-                                className="mt-1 text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
+                                disabled={isProcessing || reactionCompleted}  // ← ここに reactionCompleted を追加
+                                className={`mt-1 text-xs px-2 py-1 rounded transition ${
+                                  isProcessing || reactionCompleted  // ← ここにも追加
+                                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                                    : 'bg-red-500 text-white hover:bg-red-600'
+                                }`}
                               >
                                 回収
                               </button>
