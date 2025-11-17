@@ -94,6 +94,32 @@ export default function GameScreen({
  // ★★★ ここに追加 ★★★
  const [orderHistory, setOrderHistory] = useState<string[]>([]); // 過去5問の生成物履歴
 
+
+// 約110行目付近 - useState宣言の後あたりに新規追加
+const handleReturnHome = () => {
+  // リザルト表示中は無料で帰れる
+  if (showResults) {
+    onReturnHome();
+    return;
+  }
+  
+  // 注文受付中は2000円のペナルティ
+  const penalty = 2000;
+  
+  if (userData) {
+    const newMoney = userData.money - penalty;
+    const updatedUserData = { ...userData, money: newMoney };
+    onUserDataUpdate(updatedUserData);
+    saveUserData(updatedUserData);
+  }
+  
+  toast.error(`注文をキャンセルしました。ペナルティ: -${penalty}円`);
+  onReturnHome();
+};
+
+
+
+
   // 初期化
   useEffect(() => {
     generateOrder();
@@ -913,10 +939,10 @@ export default function GameScreen({
         {/* ヘッダー：タイトルと所持金（コンパクト版） */}
         <header className="flex justify-between items-center p-3 bg-white rounded-xl shadow-md flex-shrink-0">
           <button 
-            onClick={onReturnHome}
+            onClick={handleReturnHome}
             className="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition"
           >
-            休憩いただきます
+            {showResults ? '休憩いただきます' : 'お帰りいただく -2,000円'}
           </button>
           <h1 className="font-lobster text-2xl font-bold text-yellow-600 hidden md:block">
           Let's enjoy cooking
